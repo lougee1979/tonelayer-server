@@ -124,8 +124,13 @@ app.post('/decode', auth, async (req, res) => {
   const { text, contact = '', sensitivity = 'Low', baseline = null } = req.body;
   if (!text?.trim()) return res.status(400).json({ error: 'text is required' });
   try {
-    const result = await callClaude(buildDecodeSystem(contact, sensitivity, baseline), text, 1024);
-    res.json(result);
+    const raw = await callClaude(buildDecodeSystem(contact, sensitivity, baseline), text, 1024);
+    res.json({
+      translation: raw.translation ?? '',
+      patterns:    raw.patterns ?? raw.flags ?? [],
+      baseline:    raw.baseline ?? raw.baseline_note ?? '',
+      tentative:   raw.tentative ?? !raw.is_definitive ?? false,
+    });
   } catch (err) {
     console.error('[/decode]', err.message);
     res.status(500).json({ error: err.message });
