@@ -126,7 +126,7 @@ Low = only clear strong signals. Medium = moderate patterns. High = anything wor
 ${baselineContext}
 
 1. TRANSLATE: one or two plain sentences on what this message is actually communicating.
-2. FLAGS: list specific patterns present — guilt-tripping, cold shift, vague threat, dismissal, implied ultimatum, love-bombing, over-warmth after coldness. Only flag what is actually there at this sensitivity. If nothing, leave flags empty and explain in flags_empty_reason.
+2. PATTERNS: list specific patterns present — guilt-tripping, cold shift, vague threat, dismissal, implied ultimatum, love-bombing, over-warmth after coldness. Only flag what is actually there at this sensitivity. If nothing, leave patterns empty and explain in patterns_empty_reason.
 3. ND-AWARE: factor in that the sender might be ND. Autistic directness ≠ hostile. ADHD scattered ≠ evasive. Only flag if it's concerning even accounting for ND styles.
 4. BASELINE: note if this is consistent with or a shift from the contact's pattern. If tentative or missing, say so.
 
@@ -135,10 +135,10 @@ Never diagnose. Never say narcissist, abuser, manipulator, or any clinical label
 Reply with ONLY valid JSON:
 {
   "translation": "what the message is actually saying",
-  "flags": ["pattern if present"],
-  "flags_empty_reason": "why nothing flagged — only include if flags is empty",
-  "baseline_note": "consistent / shift / still building",
-  "is_definitive": true or false
+  "patterns": ["pattern if present"],
+  "patterns_empty_reason": "why nothing flagged — only include if patterns is empty",
+  "baseline": "consistent / shift / still building",
+  "tentative": true or false
 }`;
 }
 
