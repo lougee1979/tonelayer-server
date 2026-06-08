@@ -11,6 +11,8 @@ export function buildToneLayerSystem(profile = 'Auto', level = 'Medium') {
 
 Rewrite the entire text the user provided from ND style into NT style. Do not stop halfway, do not summarize only the beginning, and do not omit later points just because the text is long or messy. Preserve the user's intended message, requests, constraints, and necessary context from the whole original, but translate the structure, order, tone, and phrasing into what an NT reader would naturally expect.
 
+Match the emotional intensity and level of commitment in the original — never amplify them. Do not swap in stronger or more dramatic words than the user chose (for example, turning "upset" into "angry," or "space" into "alone"), do not overstate how much understanding or agreement you're claiming on the user's behalf (e.g. turning "I know you were trying to explain" into "I heard you and understood your perspective"), and never add promises, guarantees, or commitments ("we will resolve this," "I understood completely") that the original did not make. Clearer structure and phrasing should make the message land better — not louder, more final, or more binding than the user intended.
+
 The "paragraphs" array is the primary output. For any text longer than 3 sentences, you MUST return at least 2 paragraphs — never collapse everything into a single string. Brain dumps and multi-topic text must always be organized into multiple paragraphs.
 
 The explanation must teach — don't just say what changed, say WHY that change makes the text land better with NT readers.
@@ -26,36 +28,51 @@ Always respond with ONLY valid JSON — no markdown, no code fences, no extra te
 }
 
 function toneLayerLevelInstruction(level, profile) {
-  const p = profile;
-  if (p === 'ADHD') {
-    if (level === 'Light')  return "Make minimal changes. Fix typos and grammar. If the main point is completely buried, move it to the first sentence. Preserve all content and the user's voice.";
-    if (level === 'Medium') return "Restructure from ND flow into NT readability. Move the main point to the first sentence. Group related ideas into short paragraphs — each paragraph covers one topic. Cut obvious repetition but keep all distinct ideas. The rewrite MUST have multiple paragraphs.";
-    return "Reorganize and signal this content clearly for NT readers while keeping the user's voice and meaning fully intact. Lead with what the person needs, is asking, or is communicating. Break into clear paragraphs. Keep the emotional content. This is translation, not deletion. Output MUST be multiple paragraphs.";
+  // The app sends profiles as a "+"-joined label (e.g. "ADHD+PTSD+CPTSD",
+  // "AUDHD", "PTSD+CPTSD"). Parse it into independent axes — neurotype
+  // (ADHD / Autism / AUDHD) and trauma (PTSD and/or CPTSD) — and compose
+  // the instruction from those, instead of matching exact combo strings
+  // (which silently never matched the app's actual format).
+  const parts   = String(profile).split('+').map(s => s.trim()).filter(Boolean);
+  const has     = name => parts.includes(name);
+  const isADHD   = has('ADHD')   || has('AUDHD');
+  const isAutism = has('Autism') || has('AUDHD');
+  const isTrauma = has('PTSD')   || has('CPTSD') || has('PTSD/CPTSD') || has('PTSD / CPTSD');
+
+  const pieces = [];
+
+  if (isADHD && isAutism) {
+    if (level === 'Light')       pieces.push("AuDHD-aware light rewrite: fix typos and grammar, and if the main point is buried move it to the first sentence. Add a brief greeting only if completely absent. Keep all content and voice intact.");
+    else if (level === 'Medium') pieces.push("AuDHD-aware rewrite: move the main point to the first sentence, group ideas into short single-topic paragraphs, decode any implied meaning into direct statements, and add genuine (not generic) social warmth. Cut obvious repetition but keep every distinct idea.");
+    else                          pieces.push("Strong AuDHD-aware rewrite: lead with the need, organize into clear single-topic paragraphs, state implied meaning directly, and add natural social flow — while keeping the user's voice and emotional content fully intact.");
+  } else if (isADHD) {
+    if (level === 'Light')       pieces.push("Make minimal changes. Fix typos and grammar. If the main point is completely buried, move it to the first sentence. Preserve all content and the user's voice.");
+    else if (level === 'Medium') pieces.push("Restructure from ND flow into NT readability. Move the main point to the first sentence. Group related ideas into short paragraphs — each paragraph covers one topic. Cut obvious repetition but keep all distinct ideas. The rewrite MUST have multiple paragraphs.");
+    else                          pieces.push("Reorganize and signal this content clearly for NT readers while keeping the user's voice and meaning fully intact. Lead with what the person needs, is asking, or is communicating. Break into clear paragraphs. Keep the emotional content. This is translation, not deletion. Output MUST be multiple paragraphs.");
+  } else if (isAutism) {
+    if (level === 'Light')       pieces.push("Make a light ND-to-NT rewrite. Fix typos. Add a brief greeting or sign-off only if completely absent. Keep all content and voice intact.");
+    else if (level === 'Medium') pieces.push("Make a medium ND-to-NT rewrite. Add appropriate social warmth — a genuine greeting, warm transitions, polite closing. Decode any implied meaning and state it directly. Keep all literal content.");
+    else                          pieces.push("Make a strong ND-to-NT rewrite using NT social norms. Add natural social flow — appropriate opening, warmth throughout, clear closing. Remove overly blunt phrasing. Preserve all the user's meaning. Break into multiple paragraphs.");
   }
-  if (p === 'Autism') {
-    if (level === 'Light')  return "Make a light ND-to-NT rewrite. Fix typos. Add a brief greeting or sign-off only if completely absent. Keep all content and voice intact.";
-    if (level === 'Medium') return "Make a medium ND-to-NT rewrite. Add appropriate social warmth — a genuine greeting, warm transitions, polite closing. Decode any implied meaning and state it directly. Keep all literal content.";
-    return "Make a strong ND-to-NT rewrite using NT social norms. Add natural social flow — appropriate opening, warmth throughout, clear closing. Remove overly blunt phrasing. Preserve all the user's meaning. Break into multiple paragraphs.";
+
+  if (isTrauma) {
+    if (level === 'Light') {
+      pieces.push("Trauma-aware pass: soften only the most reactive or escalating phrases. Otherwise leave the structure and the user's voice intact.");
+    } else if (level === 'Medium') {
+      pieces.push("Trauma-aware pass: state the core point, feeling, or boundary ONCE, plainly. Do not stack multiple denials, apologies, or reassurances back to back (for example, do not follow \"I'm not upset\" with \"I'm not angry\" with \"I'm not frustrated\" — pick the one true statement and stop). Remove excess justification and hedging. Calm, direct tone throughout.");
+    } else {
+      pieces.push("Trauma-aware pass: write with quiet confidence. State each reassurance, denial, or boundary exactly once — never stacked, repeated, or over-explained for emphasis. Strip out anticipatory apology, defensive justification, and hedging entirely. No escalating language.");
+    }
   }
-  if (p === 'PTSD / CPTSD' || p === 'PTSD/CPTSD') {
-    if (level === 'Light')  return "Make a light ND-to-NT rewrite. Soften the most reactive or escalating phrases only. Keep all content and the user's voice intact.";
-    if (level === 'Medium') return "Remove over-justification, excessive apology, and defensive language. Rewrite hedging sentences to be direct. Calm tone throughout.";
-    return "Make a strong ND-to-NT rewrite into calm, grounded communication. Remove all defensive language, over-explanation, and anticipatory apology. Write with quiet confidence. No escalating language, no hedging.";
+
+  if (pieces.length === 0) {
+    // Auto / Mixed / General ND — no specific profile selected
+    if (level === 'Light')       pieces.push("Make a light ND-to-NT rewrite. Fix typos and grammar only. Keep all content and voice intact.");
+    else if (level === 'Medium') pieces.push("Restructure ND communication into NT-readable clarity. Main point first. Cut obvious repetition. Use multiple paragraphs. Keep the user's voice.");
+    else                          pieces.push("Fully translate ND communication for NT readers. Clear, direct, organized into multiple paragraphs. Preserve the whole message.");
   }
-  if (p === 'PTSD + Autism' || p === 'Autism + PTSD') {
-    if (level === 'Light')  return "Soften the most reactive phrases and add a greeting if absent. Minimal changes otherwise.";
-    if (level === 'Medium') return "Remove over-justification and add social warmth. Direct but kind. Use multiple paragraphs to separate distinct topics.";
-    return "Warm, direct, calm, no over-justification. Break into multiple paragraphs — one idea per paragraph.";
-  }
-  if (p === 'PTSD + ADHD' || p === 'ADHD + PTSD') {
-    if (level === 'Light')  return "Soften the most reactive phrasing and move the main point closer to the start if buried.";
-    if (level === 'Medium') return "Lead with the main point. Cut the worst tangents. Remove defensive over-explanation. Use multiple paragraphs.";
-    return "Lead with the main point or need. Break into multiple paragraphs. Keep emotional content — sequence it deliberately. Remove defensive language.";
-  }
-  // Auto / Mixed / default
-  if (level === 'Light')  return "Make a light ND-to-NT rewrite. Fix typos and grammar only. Keep all content and voice intact.";
-  if (level === 'Medium') return "Restructure ND communication into NT-readable clarity. Main point first. Cut obvious repetition. Use multiple paragraphs. Keep the user's voice.";
-  return "Fully translate ND communication for NT readers. Clear, direct, organized into multiple paragraphs. Preserve the whole message.";
+
+  return pieces.join(' ');
 }
 
 // ─── Clarity (NT → ND) ───────────────────────────────────────────────────────
@@ -67,6 +84,8 @@ export function buildClaritySystem(profile = 'General ND', level = 'Medium', sty
   return `You are ToneLayer Clarity, a communication assistant for neurotypical senders who want their message to be easier for neurodivergent people to understand. Direction: NT → ND. Audience profile: ${profile}. ${profileInstruction} ${levelInstruction} ${styleInstruction}
 
 Rewrite the entire text so it is explicit, concrete, low-threat, and easy for a neurodivergent reader to parse. Identify hidden assumptions, vague phrasing, unclear urgency, implied expectations, accidental threat signals, and missing next steps. Do not diagnose the reader. Do not shame the sender. Preserve the sender's intended meaning.
+
+Match the emotional intensity and level of commitment in the sender's original message — never amplify or soften it beyond what they actually meant. Do not swap in stronger or weaker emotional words than they chose, and do not add or remove promises, guarantees, or claims of understanding that change what they're actually committing to. Making the message clearer and lower-threat should not make it say more — or less — than the sender intended.
 
 The "paragraphs" array is the primary output. For any text longer than 3 sentences, you MUST return at least 2 paragraphs.
 
@@ -149,11 +168,11 @@ Never diagnose. Describe patterns and characteristics, not people. Do not say "t
 Reply with ONLY valid JSON:
 {
   "translation": "what the message is actually saying",
-  "patterns": ["pattern if present"],
-  "patterns_empty_reason": "why nothing flagged — only include if patterns is empty",
+  "flags": ["pattern if present"],
+  "flags_empty_reason": "why nothing flagged — only include if flags is empty",
   "communication_style": "one or two sentences on the sender's communication style characteristics — or 'neutral/unclear' if nothing stands out",
-  "baseline": "consistent / shift / still building",
-  "tentative": true or false
+  "baseline_note": "consistent / shift / still building",
+  "is_definitive": true or false
 }`;
 }
 
