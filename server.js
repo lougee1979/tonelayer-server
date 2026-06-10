@@ -268,16 +268,16 @@ const privacyPolicyHTML = `<!DOCTYPE html>
           legal details into the apps or keyboards.</li>
       </ul>
 
-      <h2>2. Voice &amp; Microphone (Insight feature)</h2>
+      <h2>2. Voice &amp; Microphone (Insight&trade; feature)</h2>
       <p>
-        The optional Insight feature uses your device's microphone to analyze the tone of your
-        voice. When active, audio is streamed directly to Hume AI's Empathic Voice Interface
-        (EVI) for vocal-tone (prosody) analysis.
+        The optional Insight&trade; feature uses your device's microphone to analyze the tone of
+        your voice. When active, audio is streamed directly to Hume AI's Empathic Voice
+        Interface (EVI) for vocal-tone (prosody) analysis.
       </p>
       <ul>
         <li>Audio is <strong>not recorded or stored</strong> by ToneLayer.</li>
         <li>Audio is not played back to you or anyone else.</li>
-        <li>Insight is entirely optional and only runs while you are actively using it.</li>
+        <li>Insight&trade; is entirely optional and only runs while you are actively using it.</li>
       </ul>
 
       <h2>3. Information Stored on Your Device</h2>
