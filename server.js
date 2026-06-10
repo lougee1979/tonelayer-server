@@ -33,6 +33,10 @@ app.get('/health', (_, res) => {
   res.json({ status: 'ok', service: 'ToneLayer API', version: '1.0.0' });
 });
 
+app.get('/privacy', (_, res) => {
+  res.type('html').send(privacyPolicyHTML);
+});
+
 app.get('/terms', (_, res) => {
   res.json({
     title: 'ToneLayer & ToneLayer Clarity Beta Testing Agreement',
@@ -180,9 +184,150 @@ app.post('/decode', auth, async (req, res) => {
   }
 });
 
+// ─── Privacy policy page ──────────────────────────────────────────────────────
+
+const privacyPolicyHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — ToneLayer</title>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    background: #f3f0fb;
+    color: #1f1c2e;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  h1 {
+    font-size: 28px;
+    font-weight: 800;
+    color: #5e1fc8;
+    margin-bottom: 4px;
+  }
+  .updated {
+    color: #6b6480;
+    font-size: 14px;
+    margin-bottom: 32px;
+  }
+  h2 {
+    font-size: 17px;
+    font-weight: 700;
+    color: #3a2e6e;
+    margin-top: 32px;
+    margin-bottom: 8px;
+  }
+  p, li {
+    font-size: 15px;
+    color: #2a2640;
+  }
+  ul { padding-left: 22px; }
+  a { color: #5e1fc8; }
+  .card {
+    background: #ffffff;
+    border-radius: 18px;
+    padding: 28px 32px;
+    box-shadow: 0 1px 4px rgba(60, 30, 110, 0.08);
+  }
+  footer {
+    margin-top: 32px;
+    font-size: 13px;
+    color: #8a8398;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>ToneLayer Privacy Policy</h1>
+    <div class="updated">Last updated: June 2026</div>
+    <div class="card">
+      <p>
+        This policy covers <strong>ToneLayer</strong> and <strong>ToneLayer Clarity</strong>
+        (the "apps") and the services at <strong>tonelayer.app</strong>. It explains what
+        information is processed when you use the apps and the ToneLayer keyboard extensions,
+        and how that information is handled.
+      </p>
+
+      <h2>1. Text You Submit for Rewriting or Decoding</h2>
+      <p>
+        When you use a rewrite, decode, or screening feature, the text you enter is sent over
+        an encrypted (HTTPS) connection to the ToneLayer server, which forwards it to
+        Anthropic's Claude API to generate a response. The result is sent back to your device.
+      </p>
+      <ul>
+        <li>Your text is <strong>not stored permanently</strong> on the ToneLayer server.</li>
+        <li>Please do not enter passwords, financial information, or sensitive medical or
+          legal details into the apps or keyboards.</li>
+      </ul>
+
+      <h2>2. Voice &amp; Microphone (Insight feature)</h2>
+      <p>
+        The optional Insight feature uses your device's microphone to analyze the tone of your
+        voice. When active, audio is streamed directly to Hume AI's Empathic Voice Interface
+        (EVI) for vocal-tone (prosody) analysis.
+      </p>
+      <ul>
+        <li>Audio is <strong>not recorded or stored</strong> by ToneLayer.</li>
+        <li>Audio is not played back to you or anyone else.</li>
+        <li>Insight is entirely optional and only runs while you are actively using it.</li>
+      </ul>
+
+      <h2>3. Information Stored on Your Device</h2>
+      <p>
+        The apps and their keyboard extensions share a small amount of data on your device
+        (an "App Group" container) so the keyboard can remember things like whether you've
+        accepted the Beta Testing Agreement, your communication profile and settings, and the
+        most recent teaching note. This information stays on your device and is not sent to
+        our servers.
+      </p>
+
+      <h2>4. No Accounts, No Ads, No Tracking</h2>
+      <p>
+        The apps do not require you to create an account or sign in. We do not use
+        third-party advertising or analytics SDKs, and we do not sell or share your
+        information with advertisers or data brokers.
+      </p>
+
+      <h2>5. Data Security</h2>
+      <p>
+        All communication with the ToneLayer server is encrypted in transit (HTTPS), and
+        access to the API requires an authorization token bundled with the apps.
+      </p>
+
+      <h2>6. Children's Privacy</h2>
+      <p>
+        The apps are not directed to children under 13, and we do not knowingly collect
+        information from children under 13.
+      </p>
+
+      <h2>7. Changes to This Policy</h2>
+      <p>
+        We may update this policy from time to time. Material changes will be reflected by
+        updating the "Last updated" date above.
+      </p>
+
+      <h2>8. Contact</h2>
+      <p>
+        Questions about this policy can be sent through the feedback option in the app or to
+        the support email listed on the App Store listing.
+      </p>
+    </div>
+    <footer>Copyright (c) 2026 Alden Lougee. All rights reserved.</footer>
+  </div>
+</body>
+</html>`;
+
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
   console.log(`✅  ToneLayer API running on port ${PORT}`);
-  console.log(`    Endpoints: GET /health  POST /rewrite  POST /narc  POST /decode`);
+  console.log(`    Endpoints: GET /health  POST /rewrite  POST /narc  POST /decode  GET /privacy  GET /terms`);
 });
