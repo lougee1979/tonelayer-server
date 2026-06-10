@@ -3,10 +3,20 @@
 // distribution, reverse-engineering, or derivative use is prohibited.
 // The AI prompts and system instructions in this file are protected by copyright law.
 
+// ─── Shared ───────────────────────────────────────────────────────────────────
+
+// Builds a short note injected into the system prompt when the text was
+// dictated and Hume's prosody analysis picked up on the user's vocal tone.
+function voiceToneNote(tone) {
+  if (!tone) return '';
+  return `\nThe user dictated this text aloud, and voice analysis detected these vocal tones: ${tone}. If these suggest meaningful distress (anxiety, anger, sadness, fear, tension), weigh that alongside the text itself when deciding the "distortions" array and writing the explanation — the words alone may not fully capture how charged this moment is for them.\n`;
+}
+
 // ─── ToneLayer (ND → NT) ──────────────────────────────────────────────────────
 
-export function buildToneLayerSystem(profile = 'Auto', level = 'Medium') {
+export function buildToneLayerSystem(profile = 'Auto', level = 'Medium', tone = '') {
   const instruction = toneLayerLevelInstruction(level, profile);
+  const toneNote = voiceToneNote(tone);
   return `You are ToneLayer, a communication assistant that helps neurodivergent people be understood by neurotypical readers. Your job is to translate the structure and signals of ND communication — not to delete the person's voice, meaning, or emotional content. Direction: ND → NT. Profile: ${profile}. ${instruction}
 
 Rewrite the entire text the user provided from ND style into NT style. Do not stop halfway, do not summarize only the beginning, and do not omit later points just because the text is long or messy. Preserve the user's intended message, requests, constraints, and necessary context from the whole original, but translate the structure, order, tone, and phrasing into what an NT reader would naturally expect.
@@ -16,7 +26,7 @@ Match the emotional intensity and level of commitment in the original — never 
 The "paragraphs" array is the primary output. For any text longer than 3 sentences, you MUST return at least 2 paragraphs — never collapse everything into a single string. Brain dumps and multi-topic text must always be organized into multiple paragraphs.
 
 The explanation must teach — don't just say what changed, say WHY that change makes the text land better with NT readers.
-
+${toneNote}
 Always respond with ONLY valid JSON — no markdown, no code fences, no extra text.
 
 {
@@ -77,10 +87,11 @@ function toneLayerLevelInstruction(level, profile) {
 
 // ─── Clarity (NT → ND) ───────────────────────────────────────────────────────
 
-export function buildClaritySystem(profile = 'General ND', level = 'Medium', style = 'Rewrite') {
+export function buildClaritySystem(profile = 'General ND', level = 'Medium', style = 'Rewrite', tone = '') {
   const profileInstruction = clarityProfileInstruction(profile);
   const levelInstruction   = clarityLevelInstruction(level);
   const styleInstruction   = clarityStyleInstruction(style);
+  const toneNote = voiceToneNote(tone);
   return `You are ToneLayer Clarity, a communication assistant for neurotypical senders who want their message to be easier for neurodivergent people to understand. Direction: NT → ND. Audience profile: ${profile}. ${profileInstruction} ${levelInstruction} ${styleInstruction}
 
 Rewrite the entire text so it is explicit, concrete, low-threat, and easy for a neurodivergent reader to parse. Identify hidden assumptions, vague phrasing, unclear urgency, implied expectations, accidental threat signals, and missing next steps. Do not diagnose the reader. Do not shame the sender. Preserve the sender's intended meaning.
@@ -88,7 +99,7 @@ Rewrite the entire text so it is explicit, concrete, low-threat, and easy for a 
 Match the emotional intensity and level of commitment in the sender's original message — never amplify or soften it beyond what they actually meant. Do not swap in stronger or weaker emotional words than they chose, and do not add or remove promises, guarantees, or claims of understanding that change what they're actually committing to. Making the message clearer and lower-threat should not make it say more — or less — than the sender intended.
 
 The "paragraphs" array is the primary output. For any text longer than 3 sentences, you MUST return at least 2 paragraphs.
-
+${toneNote}
 Always respond with ONLY valid JSON — no markdown, no code fences, no extra text.
 
 {

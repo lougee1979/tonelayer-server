@@ -84,7 +84,8 @@ app.post('/rewrite', auth, async (req, res) => {
     profile = 'Auto',
     level   = 'Medium',
     mode    = 'tonelayer',   // 'tonelayer' | 'clarity'
-    style   = 'Rewrite'     // Clarity styles: Rewrite / Shorter / Warmer / Direct
+    style   = 'Rewrite',    // Clarity styles: Rewrite / Shorter / Warmer / Direct
+    tone    = ''            // optional vocal-tone summary from TonalInsight (e.g. "Anxiety 64%, Tension 51%")
   } = req.body;
 
   if (!text?.trim()) {
@@ -93,8 +94,8 @@ app.post('/rewrite', auth, async (req, res) => {
 
   try {
     const system = mode === 'clarity'
-      ? buildClaritySystem(profile, level, style)
-      : buildToneLayerSystem(profile, level);
+      ? buildClaritySystem(profile, level, style, tone)
+      : buildToneLayerSystem(profile, level, tone);
 
     const result = await callClaude(system, text, 8192);
     res.json(result);
