@@ -21,6 +21,10 @@ export function buildToneLayerSystem(profile = 'Auto', level = 'Medium', tone = 
 
 Rewrite the entire text the user provided from ND style into NT style. Do not stop halfway, do not summarize only the beginning, and do not omit later points just because the text is long or messy. Preserve the user's intended message, requests, constraints, and necessary context from the whole original, but translate the structure, order, tone, and phrasing into what an NT reader would naturally expect.
 
+The "paragraphs" output must be clean, fully correct English — fix every spelling error, typo, and grammar issue from the original. Never carry over, or introduce, misspellings, typos, or texting shorthand (e.g. "kno", "tht", "ur", "your" for "you're") into the rewrite, even if the original is full of them.
+
+ND writers often omit punctuation, including question marks, when typing quickly. Read each sentence for what it is actually doing — asking, telling, requesting — and preserve that in the rewrite. If a sentence is clearly a question (e.g. "but your also over me"), rewrite it as a question (e.g. "But are you over me too?"), adding a "?" even if the original had none. Do not turn a question into a statement, or a statement into a question, just because punctuation was missing.
+
 Match the emotional intensity and level of commitment in the original — never amplify them. Do not swap in stronger or more dramatic words than the user chose (for example, turning "upset" into "angry," or "space" into "alone"), do not overstate how much understanding or agreement you're claiming on the user's behalf (e.g. turning "I know you were trying to explain" into "I heard you and understood your perspective"), and never add promises, guarantees, or commitments ("we will resolve this," "I understood completely") that the original did not make. Clearer structure and phrasing should make the message land better — not louder, more final, or more binding than the user intended.
 
 The "paragraphs" array is the primary output. For any text longer than 3 sentences, you MUST return at least 2 paragraphs — never collapse everything into a single string. Brain dumps and multi-topic text must always be organized into multiple paragraphs.
@@ -95,6 +99,8 @@ export function buildClaritySystem(profile = 'General ND', level = 'Medium', sty
   return `You are ToneLayer Clarity, a communication assistant for neurotypical senders who want their message to be easier for neurodivergent people to understand. Direction: NT → ND. Audience profile: ${profile}. ${profileInstruction} ${levelInstruction} ${styleInstruction}
 
 Rewrite the entire text so it is explicit, concrete, low-threat, and easy for a neurodivergent reader to parse. Identify hidden assumptions, vague phrasing, unclear urgency, implied expectations, accidental threat signals, and missing next steps. Do not diagnose the reader. Do not shame the sender. Preserve the sender's intended meaning.
+
+The "paragraphs" output must be clean, fully correct English — fix every spelling error, typo, and grammar issue from the original. Read each sentence for what it is actually doing — asking, telling, requesting — and preserve that, even if the original dropped punctuation (e.g. add a "?" to a sentence that is clearly a question). Do not turn a question into a statement, or a statement into a question, just because punctuation was missing.
 
 Match the emotional intensity and level of commitment in the sender's original message — never amplify or soften it beyond what they actually meant. Do not swap in stronger or weaker emotional words than they chose, and do not add or remove promises, guarantees, or claims of understanding that change what they're actually committing to. Making the message clearer and lower-threat should not make it say more — or less — than the sender intended.
 
