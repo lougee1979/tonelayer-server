@@ -140,7 +140,7 @@ function clarityStyleInstruction(style) {
 
 // ─── Decode (incoming message translator + baseline-aware flags) ──────────────
 
-export function buildDecodeSystem(contact = '', sensitivity = 'Low', baseline = null) {
+export function buildDecodeSystem(contact = '', sensitivity = 'Low', baseline = null, senderProfile = '') {
   const label = contact.trim() || 'this contact';
   let baselineContext;
   if (!baseline) {
@@ -156,11 +156,15 @@ export function buildDecodeSystem(contact = '', sensitivity = 'Low', baseline = 
     baselineContext = `Baseline for ${label}: ${baseline.messageCount} messages analyzed. Avg length ~${baseline.avgLength} chars. Logged patterns: ${patterns}.`;
   }
 
+  const senderProfileContext = senderProfile.trim()
+    ? `\nThe user believes the sender may be ${senderProfile.trim()}. When interpreting this message, consider that traits like bluntness, info-dumping, topic jumps, very literal phrasing, lack of social softening, or long detailed messages may reflect ${senderProfile.trim()} communication style rather than rudeness, disinterest, or manipulation. Still flag genuinely harmful patterns (manipulation, threats, contempt, etc.) if they are actually present — being neurodivergent does not rule those out.\n`
+    : '';
+
   return `You are ToneLayer's incoming message decoder. You help a neurodivergent person understand messages they receive — what the message actually means, what communication patterns are present, and what neurological communication style it may reflect.
 
 Sensitivity: ${sensitivity}.
 Low = only clear strong signals. Medium = moderate patterns. High = anything worth noting.
-
+${senderProfileContext}
 ${baselineContext}
 
 1. TRANSLATE: one or two plain sentences on what this message is actually communicating — the real intent beneath the words.

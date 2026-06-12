@@ -202,10 +202,10 @@ function parseJSON(raw) {
 
 // Decode (incoming message — translate + baseline-aware flags)
 app.post('/decode', auth, async (req, res) => {
-  const { text, contact = '', sensitivity = 'Low', baseline = null } = req.body;
+  const { text, contact = '', sensitivity = 'Low', baseline = null, senderProfile = '' } = req.body;
   if (!text?.trim()) return res.status(400).json({ error: 'text is required' });
   try {
-    const raw = await callClaude(buildDecodeSystem(contact, sensitivity, baseline), text, 1024);
+    const raw = await callClaude(buildDecodeSystem(contact, sensitivity, baseline, senderProfile), text, 1024);
     res.json({
       translation:        raw.translation ?? '',
       patterns:           raw.patterns ?? raw.flags ?? [],
