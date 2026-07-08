@@ -7,7 +7,7 @@ import 'dotenv/config';
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
-import { buildToneLayerSystem, buildClaritySystem, buildNarcSystem, buildDecodeSystem } from './prompts.js';
+import { buildToneLayerSystem, buildClaritySystem, buildNarcSystem, buildDecodeSystem, buildRefineSystem } from './prompts.js';
 
 const app  = express();
 app.use(express.json({ limit: '10mb' }));
@@ -135,6 +135,31 @@ app.post('/rewrite', auth, async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('[/rewrite]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Refine — targeted correction on an existing rewrite, not a fresh full rewrite
+app.post('/refine', auth, async (req, res) => {
+  const {
+    previousRewrite,
+    instruction,
+    profile = 'Auto',
+    level   = 'Medium',
+    mode    = 'tonelayer'
+  } = req.body;
+
+  if (!previousRewrite?.trim() || !instruction?.trim()) {
+    return res.status(400).json({ error: 'previousRewrite and instruction are required' });
+  }
+
+  try {
+    const system = buildRefineSystem(mode, profile, level);
+    const combined = `CURRENT REWRITE:\n${previousRewrite}\n\nINSTRUCTION:\n${instruction}`;
+    const result = await callClaude(system, combined, 8192);
+    res.json(result);
+  } catch (err) {
+    console.error('[/refine]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -451,5 +476,5 @@ const privacyPolicyHTML = `<!DOCTYPE html>
 
 app.listen(PORT, () => {
   console.log(`✅  ToneLayer API running on port ${PORT}`);
-  console.log(`    Endpoints: GET /health  POST /rewrite  POST /narc  POST /decode  POST /analytics  GET /analytics/summary  GET /privacy  GET /terms`);
+  console.log(`    Endpoints: GET /health  POST /rewrite  POST /refine  POST /narc  POST /decode  POST /analytics  GET /analytics/summary  GET /privacy  GET /terms`);
 });

@@ -12,6 +12,13 @@ function voiceToneNote(tone) {
   return `\nThe user dictated this text aloud, and voice analysis detected these vocal tones: ${tone}. If these suggest meaningful distress (anxiety, anger, sadness, fear, tension), weigh that alongside the text itself when deciding the "distortions" array and writing the explanation — the words alone may not fully capture how charged this moment is for them.\n`;
 }
 
+// Injected into every prompt that might receive redacted text — the client
+// replaces names, phone numbers, emails, and addresses with bracketed
+// tokens before sending anything here, and swaps the real values back in
+// locally once a response comes back. The model must never see this as
+// something to translate or clean up.
+const TOKEN_PRESERVATION_NOTE = 'If the text contains bracketed placeholder tokens such as [NAME_1], [PHONE_1], or [EMAIL_1], treat them as opaque identifiers standing in for redacted personal information — reproduce every token exactly as written, unchanged, in every field of your output. Never translate, rephrase, guess at, or drop a token.';
+
 // ─── ToneLayer (ND → NT) ──────────────────────────────────────────────────────
 
 export function buildToneLayerSystem(profile = 'Auto', level = 'Medium', tone = '') {
@@ -31,6 +38,8 @@ The "paragraphs" array is the primary output. For any text longer than 3 sentenc
 
 The explanation must teach — don't just say what changed, say WHY that change makes the text land better with NT readers.
 ${toneNote}
+${TOKEN_PRESERVATION_NOTE}
+
 Always respond with ONLY valid JSON — no markdown, no code fences, no extra text.
 
 {
@@ -106,6 +115,8 @@ Match the emotional intensity and level of commitment in the sender's original m
 
 The "paragraphs" array is the primary output. For any text longer than 3 sentences, you MUST return at least 2 paragraphs.
 ${toneNote}
+${TOKEN_PRESERVATION_NOTE}
+
 Always respond with ONLY valid JSON — no markdown, no code fences, no extra text.
 
 {
@@ -186,6 +197,8 @@ ${baselineContext}
 
 Never diagnose. Describe patterns and characteristics, not people. Do not say "this person has X disorder."
 
+${TOKEN_PRESERVATION_NOTE}
+
 Reply with ONLY valid JSON:
 {
   "translation": "what the message is actually saying",
@@ -210,6 +223,8 @@ The validation field must be one clear direct sentence confirming what the user 
 
 The boundary_script should be calm, short, achievable. Include permission to say nothing — silence is valid.
 
+${TOKEN_PRESERVATION_NOTE}
+
 Return ONLY valid JSON:
 {
   "risk_level": "high|moderate|low|none",
@@ -217,5 +232,28 @@ Return ONLY valid JSON:
   "summary": "2-3 plain sentences: what this message is doing and why it feels wrong",
   "validation": "one direct sentence confirming what the user senses is real",
   "boundary_script": "one calm short response the user could give — or explicit permission to say nothing"
+}`;
+}
+
+// ─── Refine (targeted correction on an existing rewrite) ──────────────────────
+
+export function buildRefineSystem(mode = 'tonelayer', profile = 'Auto', level = 'Medium') {
+  const direction = mode === 'clarity'
+    ? 'You are ToneLayer Clarity, refining a rewrite that translates NT communication into ND-accessible language. Direction: NT → ND.'
+    : 'You are ToneLayer, refining a rewrite that translates ND communication into NT-legible language. Direction: ND → NT.';
+
+  return `${direction} Profile: ${profile}. Level: ${level}.
+
+You will be given the CURRENT REWRITE and a short INSTRUCTION describing one specific correction the user wants — the user is telling you it misread their intent in some way, or needs a small targeted tweak. Apply only what the instruction asks. Preserve everything else about the current rewrite exactly as it is — wording, structure, paragraph breaks, tone — except for what the instruction specifically addresses. Do not perform a fresh full rewrite from scratch.
+
+${TOKEN_PRESERVATION_NOTE}
+
+Always respond with ONLY valid JSON — no markdown, no code fences, no extra text.
+
+{
+  "paragraphs": ["first paragraph", "second paragraph if needed"],
+  "explanation": "REQUIRED: one sentence explaining what you changed in response to the instruction.",
+  "distortions": [],
+  "grammar_only": "grammar-fixed version of the full updated text."
 }`;
 }
