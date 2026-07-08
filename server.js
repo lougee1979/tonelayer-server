@@ -146,7 +146,8 @@ app.post('/refine', auth, async (req, res) => {
     instruction,
     profile = 'Auto',
     level   = 'Medium',
-    mode    = 'tonelayer'
+    mode    = 'tonelayer',
+    tone    = ''
   } = req.body;
 
   if (!previousRewrite?.trim() || !instruction?.trim()) {
@@ -154,7 +155,7 @@ app.post('/refine', auth, async (req, res) => {
   }
 
   try {
-    const system = buildRefineSystem(mode, profile, level);
+    const system = buildRefineSystem(mode, profile, level, tone);
     const combined = `CURRENT REWRITE:\n${previousRewrite}\n\nINSTRUCTION:\n${instruction}`;
     const result = await callClaude(system, combined, 8192);
     res.json(result);

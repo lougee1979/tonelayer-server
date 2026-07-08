@@ -239,15 +239,16 @@ Return ONLY valid JSON:
 
 // ─── Refine (targeted correction on an existing rewrite) ──────────────────────
 
-export function buildRefineSystem(mode = 'tonelayer', profile = 'Auto', level = 'Medium') {
+export function buildRefineSystem(mode = 'tonelayer', profile = 'Auto', level = 'Medium', tone = '') {
   const direction = mode === 'clarity'
     ? 'You are ToneLayer Clarity, refining a rewrite that translates NT communication into ND-accessible language. Direction: NT → ND.'
     : 'You are ToneLayer, refining a rewrite that translates ND communication into NT-legible language. Direction: ND → NT.';
+  const toneNote = voiceToneNote(tone);
 
   return `${direction} Profile: ${profile}. Level: ${level}.
 
 You will be given the CURRENT REWRITE and a short INSTRUCTION describing one specific correction the user wants — the user is telling you it misread their intent in some way, or needs a small targeted tweak. Apply only what the instruction asks. Preserve everything else about the current rewrite exactly as it is — wording, structure, paragraph breaks, tone — except for what the instruction specifically addresses. Do not perform a fresh full rewrite from scratch.
-
+${toneNote}
 ${TOKEN_PRESERVATION_NOTE}
 
 Always respond with ONLY valid JSON — no markdown, no code fences, no extra text.
