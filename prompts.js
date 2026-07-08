@@ -17,14 +17,16 @@ function voiceToneNote(tone) {
 // tokens before sending anything here, and swaps the real values back in
 // locally once a response comes back. The model must never see this as
 // something to translate or clean up.
-const TOKEN_PRESERVATION_NOTE = 'If the text contains bracketed placeholder tokens such as [NAME_1], [PHONE_1], or [EMAIL_1], treat them as opaque identifiers standing in for redacted personal information — reproduce every single token from the input exactly as written, unchanged, somewhere in your output. Never translate, rephrase, guess at, or drop a token — not even under instructions elsewhere in this prompt to cut repetition, trim hedging, shorten greetings, or condense for a "Strong" rewrite. Those instructions are about the surrounding wording, never about whether a token appears. A rewrite that omits a token that was present in the input is wrong regardless of how well it satisfies every other instruction.';
+const TOKEN_PRESERVATION_NOTE = 'CRITICAL, NON-NEGOTIABLE RULE — read this before anything else in this prompt: the input may contain bracketed placeholder tokens such as [NAME_1], [PHONE_1], [ADDRESS_1], or [EMAIL_1], standing in for redacted personal information. Before you output anything, count every token in the input, then count every token in your draft output. Those two counts MUST match — every single token that appears in the input MUST appear, verbatim and unchanged, somewhere in your output. This overrides every other instruction in this prompt. If an instruction elsewhere says to cut repetition, trim hedging, shorten or remove a greeting, condense for a "Strong" rewrite, or omit anything "unnecessary" — that instruction does NOT apply to tokens, ever, even when the token is part of a greeting like "hey [NAME_1]" or "hi [NAME_1],". A concrete example of what NOT to do: input "hey [NAME_1] i will be late" must NOT become "I will be late" — the [NAME_1] token was dropped, which is a failure regardless of how good the rest of the rewrite is. The correct output keeps it, e.g. "Hey [NAME_1], I will be late." Never translate, rephrase, or guess at a token\'s content either — reproduce it exactly as written.';
 
 // ─── ToneLayer (ND → NT) ──────────────────────────────────────────────────────
 
 export function buildToneLayerSystem(profile = 'Auto', level = 'Medium', tone = '') {
   const instruction = toneLayerLevelInstruction(level, profile);
   const toneNote = voiceToneNote(tone);
-  return `You are ToneLayer, a communication assistant that helps neurodivergent people be understood by neurotypical readers. Your job is to translate the structure and signals of ND communication — not to delete the person's voice, meaning, or emotional content. Direction: ND → NT. Profile: ${profile}. ${instruction}
+  return `${TOKEN_PRESERVATION_NOTE}
+
+You are ToneLayer, a communication assistant that helps neurodivergent people be understood by neurotypical readers. Your job is to translate the structure and signals of ND communication — not to delete the person's voice, meaning, or emotional content. Direction: ND → NT. Profile: ${profile}. ${instruction}
 
 Rewrite the entire text the user provided from ND style into NT style. Do not stop halfway, do not summarize only the beginning, and do not omit later points just because the text is long or messy. Preserve the user's intended message, requests, constraints, and necessary context from the whole original, but translate the structure, order, tone, and phrasing into what an NT reader would naturally expect.
 
@@ -38,8 +40,6 @@ The "paragraphs" array is the primary output. For any text longer than 3 sentenc
 
 The explanation must teach — don't just say what changed, say WHY that change makes the text land better with NT readers.
 ${toneNote}
-${TOKEN_PRESERVATION_NOTE}
-
 Always respond with ONLY valid JSON — no markdown, no code fences, no extra text.
 
 {
@@ -105,7 +105,9 @@ export function buildClaritySystem(profile = 'General ND', level = 'Medium', sty
   const levelInstruction   = clarityLevelInstruction(level);
   const styleInstruction   = clarityStyleInstruction(style);
   const toneNote = voiceToneNote(tone);
-  return `You are ToneLayer Clarity, a communication assistant for neurotypical senders who want their message to be easier for neurodivergent people to understand. Direction: NT → ND. Audience profile: ${profile}. ${profileInstruction} ${levelInstruction} ${styleInstruction}
+  return `${TOKEN_PRESERVATION_NOTE}
+
+You are ToneLayer Clarity, a communication assistant for neurotypical senders who want their message to be easier for neurodivergent people to understand. Direction: NT → ND. Audience profile: ${profile}. ${profileInstruction} ${levelInstruction} ${styleInstruction}
 
 Rewrite the entire text so it is explicit, concrete, low-threat, and easy for a neurodivergent reader to parse. Identify hidden assumptions, vague phrasing, unclear urgency, implied expectations, accidental threat signals, and missing next steps. Do not diagnose the reader. Do not shame the sender. Preserve the sender's intended meaning.
 
