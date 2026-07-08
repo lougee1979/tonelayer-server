@@ -17,7 +17,7 @@ function voiceToneNote(tone) {
 // tokens before sending anything here, and swaps the real values back in
 // locally once a response comes back. The model must never see this as
 // something to translate or clean up.
-const TOKEN_PRESERVATION_NOTE = 'If the text contains bracketed placeholder tokens such as [NAME_1], [PHONE_1], or [EMAIL_1], treat them as opaque identifiers standing in for redacted personal information — reproduce every token exactly as written, unchanged, in every field of your output. Never translate, rephrase, guess at, or drop a token.';
+const TOKEN_PRESERVATION_NOTE = 'If the text contains bracketed placeholder tokens such as [NAME_1], [PHONE_1], or [EMAIL_1], treat them as opaque identifiers standing in for redacted personal information — reproduce every single token from the input exactly as written, unchanged, somewhere in your output. Never translate, rephrase, guess at, or drop a token — not even under instructions elsewhere in this prompt to cut repetition, trim hedging, shorten greetings, or condense for a "Strong" rewrite. Those instructions are about the surrounding wording, never about whether a token appears. A rewrite that omits a token that was present in the input is wrong regardless of how well it satisfies every other instruction.';
 
 // ─── ToneLayer (ND → NT) ──────────────────────────────────────────────────────
 
