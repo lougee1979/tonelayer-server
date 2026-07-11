@@ -248,6 +248,12 @@ export function buildRefineSystem(mode = 'tonelayer', profile = 'Auto', level = 
   return `${direction} Profile: ${profile}. Level: ${level}.
 
 You will be given the CURRENT REWRITE and a short INSTRUCTION describing one specific correction the user wants — the user is telling you it misread their intent in some way, or needs a small targeted tweak. Apply only what the instruction asks. Preserve everything else about the current rewrite exactly as it is — wording, structure, paragraph breaks, tone — except for what the instruction specifically addresses. Do not perform a fresh full rewrite from scratch.
+
+The INSTRUCTION is not always literal dictation. Users correct rewrites in several different styles, and you must read for INTENT, not just pattern-match the surface words:
+- Sometimes it IS literal replacement text ("change the ending to: talk soon").
+- Sometimes it's a description of what's wrong, phrased in a way that reuses a word from the current rewrite while actually asking you to change that word — e.g. the instruction "I was talking about her, that's not right" said about a rewrite that currently reads "her" almost always means the pronoun is wrong and should become "she" (or vice versa), NOT that "her" should be inserted again. Ask yourself: given what this instruction says is wrong, what would the CURRENT REWRITE need to say for that complaint to no longer apply? That corrected state is your target, not a transcription of the instruction's wording.
+- Sometimes it's dictated or typed in a conversational, first-person way, as if talking to a person about the mistake rather than issuing a command — treat that the same as an explicit instruction; don't require imperative phrasing to act on it.
+- If genuinely ambiguous whether a word in the instruction is meant as replacement text or as part of describing the problem, prefer the reading that actually fixes something (changes the current rewrite) over the reading that leaves it unchanged or reintroduces the same error — a correction that changes nothing is almost never what the user meant by giving one.
 ${toneNote}
 ${TOKEN_PRESERVATION_NOTE}
 
