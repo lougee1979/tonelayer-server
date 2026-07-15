@@ -7,7 +7,7 @@ import 'dotenv/config';
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
-import { buildToneLayerSystem, buildClaritySystem, buildNarcSystem, buildDecodeSystem, buildRefineSystem } from './prompts.js';
+import { buildToneLayerSystem, buildClaritySystem, buildNarcSystem, buildDecodeSystem, buildRefineSystem, buildCompanionSystem } from './prompts.js';
 
 const app  = express();
 app.use(express.json({ limit: '10mb' }));
@@ -165,6 +165,39 @@ app.post('/refine', auth, async (req, res) => {
   }
 });
 
+// Companion — a single continuous conversational entity that both refines
+// rewrites and coaches on prioritization/decisions in the same thread,
+// instead of the isolated one-shot request/response every other route
+// here uses. Unlike /refine, the client sends the *whole* conversation so
+// far (not just one instruction), and the reply is plain conversational
+// text, not structured JSON — this is a chat, not a rewrite tool.
+app.post('/companion', auth, async (req, res) => {
+  const {
+    messages = [],
+    rewriteContext = '',
+    profile = 'Auto',
+    tone = ''
+  } = req.body;
+
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'messages array is required' });
+  }
+  for (const m of messages) {
+    if (!m || (m.role !== 'user' && m.role !== 'assistant') || typeof m.content !== 'string') {
+      return res.status(400).json({ error: 'each message needs a role of "user" or "assistant" and string content' });
+    }
+  }
+
+  try {
+    const system = buildCompanionSystem(profile, rewriteContext, tone);
+    const reply = await callClaudeConversation(system, messages, 2048);
+    res.json({ reply });
+  } catch (err) {
+    console.error('[/companion]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Narcissist Screen
 app.post('/narc', auth, async (req, res) => {
   const { text } = req.body;
@@ -211,6 +244,35 @@ async function callClaude(system, text, maxTokens = 8192) {
   const data    = await response.json();
   const content = data.content[0].text;
   return parseJSON(content);
+}
+
+// Same Claude call, but for a real multi-turn conversation: takes the full
+// message history and returns plain conversational text instead of forcing
+// every reply into the fixed JSON shape the rewrite/refine/narc/decode
+// routes need.
+async function callClaudeConversation(system, messages, maxTokens = 2048) {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method:  'POST',
+    headers: {
+      'x-api-key':         CLAUDE_API_KEY,
+      'anthropic-version': '2023-06-01',
+      'content-type':      'application/json'
+    },
+    body: JSON.stringify({
+      model:      'claude-haiku-4-5-20251001',
+      max_tokens: maxTokens,
+      system,
+      messages
+    })
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Claude API error ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.content[0].text;
 }
 
 function parseJSON(raw) {
@@ -477,5 +539,5 @@ const privacyPolicyHTML = `<!DOCTYPE html>
 
 app.listen(PORT, () => {
   console.log(`✅  ToneLayer API running on port ${PORT}`);
-  console.log(`    Endpoints: GET /health  POST /rewrite  POST /refine  POST /narc  POST /decode  POST /analytics  GET /analytics/summary  GET /privacy  GET /terms`);
+  console.log(`    Endpoints: GET /health  POST /rewrite  POST /refine  POST /companion  POST /narc  POST /decode  POST /analytics  GET /analytics/summary  GET /privacy  GET /terms`);
 });

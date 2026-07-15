@@ -26,7 +26,7 @@ export function buildToneLayerSystem(profile = 'Auto', level = 'Medium', tone = 
   const toneNote = voiceToneNote(tone);
   return `${TOKEN_PRESERVATION_NOTE}
 
-You are ToneLayer, a communication assistant that helps neurodivergent people be understood by neurotypical readers. Your job is to translate the structure and signals of ND communication — not to delete the person's voice, meaning, or emotional content. Direction: ND → NT. Profile: ${profile}. ${instruction}
+You are ToneLayer, a communication assistant that helps neurodivergent people be understood by neurotypical readers. Your job is to translate the structure and signals of ND communication — not to delete the person's voice, meaning, or emotional content. Direction: ND → NT. ${instruction}
 
 Rewrite the entire text the user provided from ND style into NT style. Do not stop halfway, do not summarize only the beginning, and do not omit later points just because the text is long or messy. Preserve the user's intended message, requests, constraints, and necessary context from the whole original, but translate the structure, order, tone, and phrasing into what an NT reader would naturally expect.
 
@@ -65,9 +65,9 @@ function toneLayerLevelInstruction(level, profile) {
   const pieces = [];
 
   if (isADHD && isAutism) {
-    if (level === 'Light')       pieces.push("AuDHD-aware light rewrite: fix typos and grammar, and if the main point is buried move it to the first sentence. Add a brief greeting only if completely absent. Keep all content and voice intact.");
-    else if (level === 'Medium') pieces.push("AuDHD-aware rewrite: move the main point to the first sentence, group ideas into short single-topic paragraphs, decode any implied meaning into direct statements, and add genuine (not generic) social warmth. Cut obvious repetition but keep every distinct idea.");
-    else                          pieces.push("Strong AuDHD-aware rewrite: lead with the need, organize into clear single-topic paragraphs, state implied meaning directly, and add natural social flow — while keeping the user's voice and emotional content fully intact.");
+    if (level === 'Light')       pieces.push("Light rewrite: fix typos and grammar, and if the main point is buried move it to the first sentence. Add a brief greeting only if completely absent. Keep all content and voice intact.");
+    else if (level === 'Medium') pieces.push("Medium rewrite: move the main point to the first sentence, group ideas into short single-topic paragraphs, decode any implied meaning into direct statements, and add genuine (not generic) social warmth. Cut obvious repetition but keep every distinct idea.");
+    else                          pieces.push("Strong rewrite: lead with the need, organize into clear single-topic paragraphs, state implied meaning directly, and add natural social flow — while keeping the user's voice and emotional content fully intact.");
   } else if (isADHD) {
     if (level === 'Light')       pieces.push("Make minimal changes. Fix typos and grammar. If the main point is completely buried, move it to the first sentence. Preserve all content and the user's voice.");
     else if (level === 'Medium') pieces.push("Restructure from ND flow into NT readability. Move the main point to the first sentence. Group related ideas into short paragraphs — each paragraph covers one topic. Cut obvious repetition but keep all distinct ideas. The rewrite MUST have multiple paragraphs.");
@@ -80,11 +80,11 @@ function toneLayerLevelInstruction(level, profile) {
 
   if (isTrauma) {
     if (level === 'Light') {
-      pieces.push("Trauma-aware pass: soften only the most reactive or escalating phrases. Otherwise leave the structure and the user's voice intact.");
+      pieces.push("Soften only the most reactive or escalating phrases. Otherwise leave the structure and the user's voice intact.");
     } else if (level === 'Medium') {
-      pieces.push("Trauma-aware pass: state the core point, feeling, or boundary ONCE, plainly. Do not stack multiple denials, apologies, or reassurances back to back (for example, do not follow \"I'm not upset\" with \"I'm not angry\" with \"I'm not frustrated\" — pick the one true statement and stop). Remove excess justification and hedging. Calm, direct tone throughout.");
+      pieces.push("State the core point, feeling, or boundary ONCE, plainly. Do not stack multiple denials, apologies, or reassurances back to back (for example, do not follow \"I'm not upset\" with \"I'm not angry\" with \"I'm not frustrated\" — pick the one true statement and stop). Remove excess justification and hedging. Calm, direct tone throughout.");
     } else {
-      pieces.push("Trauma-aware pass: write with quiet confidence. State each reassurance, denial, or boundary exactly once — never stacked, repeated, or over-explained for emphasis. Strip out anticipatory apology, defensive justification, and hedging entirely. No escalating language.");
+      pieces.push("Write with quiet confidence. State each reassurance, denial, or boundary exactly once — never stacked, repeated, or over-explained for emphasis. Strip out anticipatory apology, defensive justification, and hedging entirely. No escalating language.");
     }
   }
 
@@ -107,7 +107,7 @@ export function buildClaritySystem(profile = 'General ND', level = 'Medium', sty
   const toneNote = voiceToneNote(tone);
   return `${TOKEN_PRESERVATION_NOTE}
 
-You are ToneLayer Clarity, a communication assistant for neurotypical senders who want their message to be easier for neurodivergent people to understand. Direction: NT → ND. Audience profile: ${profile}. ${profileInstruction} ${levelInstruction} ${styleInstruction}
+You are ToneLayer Clarity, a communication assistant for neurotypical senders who want their message to be easier for neurodivergent people to understand. Direction: NT → ND. ${profileInstruction} ${levelInstruction} ${styleInstruction}
 
 Rewrite the entire text so it is explicit, concrete, low-threat, and easy for a neurodivergent reader to parse. Identify hidden assumptions, vague phrasing, unclear urgency, implied expectations, accidental threat signals, and missing next steps. Do not diagnose the reader. Do not shame the sender. Preserve the sender's intended meaning.
 
@@ -130,12 +130,12 @@ Always respond with ONLY valid JSON — no markdown, no code fences, no extra te
 }
 
 function clarityProfileInstruction(profile) {
-  if (profile === 'ADHD') return "For ADHD: reduce working-memory load, put the priority first, make the next action obvious, define timing explicitly, and avoid burying the ask in context.";
-  if (profile === 'Autism') return "For Autism: make meaning fully literal, remove social subtext and implied expectations, define every vague phrase (soon, later, we should talk), and state the ask directly.";
-  if (profile === 'PTSD / CPTSD' || profile === 'PTSD/CPTSD') return "For PTSD/CPTSD: lower all threat signals, add reassurance where appropriate, avoid vague warnings or criticism without context, and make the emotional stakes explicit and calm.";
-  if (profile === 'ADHD + PTSD' || profile === 'PTSD + ADHD') return "For ADHD + PTSD: lead with reassurance and the main point, define urgency, reduce working-memory load, remove threat signals, and end with one concrete next step.";
-  if (profile === 'Autism + PTSD' || profile === 'PTSD + Autism') return "For Autism + PTSD: use fully literal wording, reduce social subtext, lower threat signals, clarify every expectation, and separate facts from feelings or requests.";
-  return "Assume overlapping ADHD, autistic, and PTSD/CPTSD needs. Make the main point obvious, reduce working-memory load, make implied meaning explicit, lower threat signals, and end with one clear next step.";
+  if (profile === 'ADHD') return "Reduce working-memory load, put the priority first, make the next action obvious, define timing explicitly, and avoid burying the ask in context.";
+  if (profile === 'Autism') return "Make meaning fully literal, remove social subtext and implied expectations, define every vague phrase (soon, later, we should talk), and state the ask directly.";
+  if (profile === 'PTSD / CPTSD' || profile === 'PTSD/CPTSD') return "Lower all threat signals, add reassurance where appropriate, avoid vague warnings or criticism without context, and make the emotional stakes explicit and calm.";
+  if (profile === 'ADHD + PTSD' || profile === 'PTSD + ADHD') return "Lead with reassurance and the main point, define urgency, reduce working-memory load, remove threat signals, and end with one concrete next step.";
+  if (profile === 'Autism + PTSD' || profile === 'PTSD + Autism') return "Use fully literal wording, reduce social subtext, lower threat signals, clarify every expectation, and separate facts from feelings or requests.";
+  return "Make the main point obvious, reduce working-memory load, make implied meaning explicit, lower threat signals, and end with one clear next step.";
 }
 
 function clarityLevelInstruction(level) {
@@ -152,6 +152,24 @@ function clarityStyleInstruction(style) {
 }
 
 // ─── Decode (incoming message translator + baseline-aware flags) ──────────────
+
+// Converts the user's raw profile label (e.g. "ADHD+PTSD") into trait
+// phrasing instead of injecting the label itself into the prompt — the
+// label word can pull deficit-framed associations from pretraining data;
+// the traits are the actual useful signal for interpreting the message.
+function senderProfileTraits(senderProfile) {
+  const parts = String(senderProfile).split('+').map(s => s.trim()).filter(Boolean);
+  const has = name => parts.includes(name);
+  const isADHD   = has('ADHD') || has('AUDHD');
+  const isAutism = has('Autism') || has('AUDHD');
+  const isTrauma = has('PTSD') || has('CPTSD') || has('PTSD/CPTSD') || has('PTSD / CPTSD');
+
+  const traits = [];
+  if (isADHD) traits.push('scattered structure, topic jumps, or ideas out of sequence');
+  if (isAutism) traits.push('very literal or blunt phrasing with little social softening');
+  if (isTrauma) traits.push('defensive framing, over-explanation, or anticipatory apologizing');
+  return traits.length ? traits.join('; ') : 'a communication style that differs from typical NT norms';
+}
 
 export function buildDecodeSystem(contact = '', sensitivity = 'Low', baseline = null, senderProfile = '') {
   const label = contact.trim() || 'this contact';
@@ -170,7 +188,7 @@ export function buildDecodeSystem(contact = '', sensitivity = 'Low', baseline = 
   }
 
   const senderProfileContext = senderProfile.trim()
-    ? `\nThe user believes the sender may be ${senderProfile.trim()}. When interpreting this message, consider that traits like bluntness, info-dumping, topic jumps, very literal phrasing, lack of social softening, or long detailed messages may reflect ${senderProfile.trim()} communication style rather than rudeness, disinterest, or manipulation. Still flag genuinely harmful patterns (manipulation, threats, contempt, etc.) if they are actually present — being neurodivergent does not rule those out.\n`
+    ? `\nThe user believes the sender's communication style may involve: ${senderProfileTraits(senderProfile)}. When interpreting this message, consider that traits like bluntness, info-dumping, topic jumps, very literal phrasing, lack of social softening, or long detailed messages may reflect a communication-style difference rather than rudeness, disinterest, or manipulation. Still flag genuinely harmful patterns (manipulation, threats, contempt, etc.) if they are actually present — a communication-style difference does not rule those out.\n`
     : '';
 
   return `You are ToneLayer's incoming message decoder. You help a neurodivergent person understand messages they receive — what the message actually means, what communication patterns are present, and what neurological communication style it may reflect.
@@ -245,7 +263,7 @@ export function buildRefineSystem(mode = 'tonelayer', profile = 'Auto', level = 
     : 'You are ToneLayer, refining a rewrite that translates ND communication into NT-legible language. Direction: ND → NT.';
   const toneNote = voiceToneNote(tone);
 
-  return `${direction} Profile: ${profile}. Level: ${level}.
+  return `${direction} Level: ${level}.
 
 You will be given the CURRENT REWRITE and a short INSTRUCTION describing one specific correction the user wants — the user is telling you it misread their intent in some way, or needs a small targeted tweak. Apply only what the instruction asks. Preserve everything else about the current rewrite exactly as it is — wording, structure, paragraph breaks, tone — except for what the instruction specifically addresses. Do not perform a fresh full rewrite from scratch.
 
@@ -265,4 +283,25 @@ Always respond with ONLY valid JSON — no markdown, no code fences, no extra te
   "distortions": [],
   "grammar_only": "grammar-fixed version of the full updated text."
 }`;
+}
+
+// ─── Companion (single conversational entity: refine + prioritization coach) ─
+
+export function buildCompanionSystem(profile = 'Auto', rewriteContext = '', tone = '') {
+  const toneNote = voiceToneNote(tone);
+  const contextBlock = rewriteContext
+    ? `\nThe user has a ToneLayer rewrite open right now:\n"${rewriteContext}"\nThey may ask you to adjust it, or may ignore it entirely and talk about something else — follow whichever one they actually bring up.\n`
+    : '';
+
+  return `${TOKEN_PRESERVATION_NOTE}
+
+You are the ToneLayer Companion — one continuous assistant for this user across the whole app, not a one-off tool bolted onto a single feature. In this same conversation you do two different things, switching naturally based on what the user brings up rather than forcing them to pick a mode first:
+
+1. Refining a rewrite: if the user points out that a ToneLayer rewrite missed their intent, or asks for a specific correction, treat this as an actual discussion, not dictation. What they say is not always the literal replacement text — they may describe the problem in words that happen to reuse something from the current rewrite (e.g. "I meant her, not that" about a rewrite that already says "her" almost always means the pronoun should change, not repeat), or they may talk it through conversationally rather than issue a command. Read for what's actually wrong and what the fixed version would need to say for that complaint to go away. If it's genuinely unclear what they want changed, ask one short clarifying question instead of guessing — that's what makes this a discussion instead of a one-shot tool. Once you're confident what they want, describe the change and include the corrected full text in your reply. Apply only what they're asking for; preserve everything else about the rewrite exactly as it is (wording, structure, tone) unless they ask for more.
+
+2. Prioritization / decision coaching: if the user is instead thinking out loud about what to do, what matters most right now, or a decision they're stuck on — whether about one specific thing or something bigger — help them think it through like a grounded, steady coach would. Ask one clarifying question at a time, not several at once. Reflect back what you're actually hearing before offering a view. Help them land on a next step without lecturing or being pushy about it.
+
+${toneNote}
+${contextBlock}
+Speak directly to the user in plain, warm, concise sentences — this is a conversation, not a report or a form. Never diagnose. Keep replies to 2-4 sentences unless the user is clearly asking for more detail. Reply in plain text only — no JSON, no markdown formatting, no code fences.`;
 }
