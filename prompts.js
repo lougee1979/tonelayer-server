@@ -86,6 +86,19 @@ function toneLayerLevelInstruction(level, profile) {
     } else {
       pieces.push("Write with quiet confidence. State each reassurance, denial, or boundary exactly once — never stacked, repeated, or over-explained for emphasis. Strip out anticipatory apology, defensive justification, and hedging entirely. No escalating language.");
     }
+  } else if (isADHD || isAutism) {
+    // Same de-escalation goal as the trauma branch, generalized: reduce
+    // reactive/escalating DELIVERY (repetition, stacked restatements,
+    // hedging) without touching the actual words the user chose for what
+    // they felt — that distinction keeps this from conflicting with the
+    // "never amplify, never soften a deliberately chosen word" rule above.
+    if (level === 'Light') {
+      pieces.push("Soften only the most reactive or escalating phrases. Otherwise leave the structure and the user's voice intact.");
+    } else if (level === 'Medium') {
+      pieces.push("State each feeling or frustration ONCE, plainly. Do not stack multiple restatements of the same feeling back to back (for example, do not follow \"I'm upset\" with \"I'm frustrated\" with \"I'm annoyed\" — pick the one true statement and stop). Remove excess justification and hedging. Calm, direct tone throughout — without losing what the person actually felt, and without dropping or softening any specific word they deliberately chose.");
+    } else {
+      pieces.push("Write with quiet confidence. State each feeling or point exactly once — never stacked, repeated, or over-explained for emphasis. Strip out excess justification and hedging. No escalating language — while keeping the underlying feeling, meaning, and the user's specific word choices fully intact.");
+    }
   }
 
   if (pieces.length === 0) {
