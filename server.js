@@ -61,6 +61,26 @@ function appendAnalyticsEvent(ev) {
   fs.writeFileSync(ANALYTICS_FILE, JSON.stringify(trimmed));
 }
 
+// ─── Waitlist storage (public landing-page signups, JSON file on disk) ───────
+
+const WAITLIST_FILE = path.join(process.cwd(), 'waitlist.json');
+
+function loadWaitlist() {
+  try {
+    return JSON.parse(fs.readFileSync(WAITLIST_FILE, 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
+function appendWaitlistEntry(entry) {
+  const entries = loadWaitlist();
+  entries.push(entry);
+  fs.writeFileSync(WAITLIST_FILE, JSON.stringify(entries));
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 app.get('/health', (_, res) => {
@@ -377,6 +397,36 @@ app.get('/analytics/summary', adminAuth, (_, res) => {
   });
 });
 
+// Public landing-page waitlist signup — called directly from the browser at
+// www.tonelayer.app, so it needs CORS (unlike every other route here, which
+// is only ever called from the native apps) and must NOT require the app
+// token, since anything shipped in public page JS is visible to anyone.
+app.post('/waitlist', (req, res) => {
+  res.set('Access-Control-Allow-Origin', 'https://www.tonelayer.app');
+  const name  = String(req.body?.name  || '').trim();
+  const email = String(req.body?.email || '').trim();
+
+  if (!email || !EMAIL_RE.test(email)) {
+    return res.status(400).json({ error: 'A valid email is required.' });
+  }
+
+  appendWaitlistEntry({ name, email, timestamp: new Date().toISOString() });
+  res.json({ ok: true });
+});
+
+app.options('/waitlist', (_, res) => {
+  res.set('Access-Control-Allow-Origin', 'https://www.tonelayer.app');
+  res.set('Access-Control-Allow-Methods', 'POST');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  res.status(204).end();
+});
+
+// View collected signups — admin-token gated, same pattern as
+// /analytics/summary, so the raw list (names/emails) isn't publicly readable.
+app.get('/waitlist', adminAuth, (_, res) => {
+  res.json({ entries: loadWaitlist() });
+});
+
 // ─── Privacy policy page ──────────────────────────────────────────────────────
 
 const privacyPolicyHTML = `<!DOCTYPE html>
@@ -539,5 +589,5 @@ const privacyPolicyHTML = `<!DOCTYPE html>
 
 app.listen(PORT, () => {
   console.log(`✅  ToneLayer API running on port ${PORT}`);
-  console.log(`    Endpoints: GET /health  POST /rewrite  POST /refine  POST /companion  POST /narc  POST /decode  POST /analytics  GET /analytics/summary  GET /privacy  GET /terms`);
+  console.log(`    Endpoints: GET /health  POST /rewrite  POST /refine  POST /companion  POST /narc  POST /decode  POST /analytics  GET /analytics/summary  POST /waitlist  GET /waitlist  GET /privacy  GET /terms`);
 });
