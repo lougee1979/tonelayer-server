@@ -18,6 +18,13 @@ function voiceToneNote(tone) {
 // locally once a response comes back. The model must never see this as
 // something to translate or clean up.
 const TOKEN_PRESERVATION_NOTE = 'CRITICAL, NON-NEGOTIABLE RULE — read this before anything else in this prompt: the input may contain bracketed placeholder tokens such as [NAME_1], [PHONE_1], [ADDRESS_1], or [EMAIL_1], standing in for redacted personal information. Before you output anything, count every token in the input, then count every token in your draft output. Those two counts MUST match — every single token that appears in the input MUST appear, verbatim and unchanged, somewhere in your output. This overrides every other instruction in this prompt. If an instruction elsewhere says to cut repetition, trim hedging, shorten or remove a greeting, condense for a "Strong" rewrite, or omit anything "unnecessary" — that instruction does NOT apply to tokens, ever, even when the token is part of a greeting like "hey [NAME_1]" or "hi [NAME_1],". A concrete example of what NOT to do: input "hey [NAME_1] i will be late" must NOT become "I will be late" — the [NAME_1] token was dropped, which is a failure regardless of how good the rest of the rewrite is. The correct output keeps it, e.g. "Hey [NAME_1], I will be late." Never translate, rephrase, or guess at a token\'s content either — reproduce it exactly as written.\n\nThis same non-negotiable rule applies just as strictly to ordinary, non-tokenized text: if the input names a real person, place, organization, date, or other specific identifying detail in plain text (not a bracketed token), that detail MUST also appear, unchanged, somewhere in your output. Never drop a person\'s name, a greeting that contains one, or a place name for the sake of brevity, "cutting repetition," or a "Strong" condensed rewrite — those instructions govern the surrounding wording only, never whether a name or place makes it into the output at all.\n\nTwo more failure modes in this same family, found repeatedly in testing: (1) An instruction elsewhere to "decode implied meaning into direct statements" means restating something the original ALREADY clearly implies — it is NEVER permission to invent a new sentence, claim, accusation, or conclusion that isn\'t directly implied by specific wording in the original. If you can\'t point to the exact phrase that implies it, do not add it. A concrete example of what NOT to do: input ending "...it made me feel like everyone was expecting something from me" must NOT gain an invented closing sentence like "you\'re using this against me instead of owning it" — that claim does not exist in the input. (2) When the user deliberately chose a specific strong word (e.g. "coward," "threat," "furious"), that exact word MUST survive the rewrite unchanged — restructuring for calm, directness, brevity, or "matching intensity" governs the surrounding sentence only, never whether that specific word itself appears. Do not quietly swap it for a softer synonym.';
+// Found via the Refine-escalation conversation feature (2026-07-24, first
+// real case it surfaced): a literal "decode implied meaning" pass can turn
+// the user agreeing with someone already named earlier in the same message
+// into what reads like a fresh, independently-derived claim — which lands
+// as either redundant or as failing to signal that the user actually
+// agrees with that person, rather than having a third opinion.
+const ALIGNMENT_NOT_RESTATEMENT_RULE = 'If the user\'s message restates, in different words, a position or claim already attributed to a specific person earlier in the SAME message, do not render it as an independent claim or hypothesis — phrase it as alignment with that person\'s already-stated position instead. A concrete example: input describes two people disagreeing, one attributing an outcome to A\'s explanation and the other to B\'s, then the writer adds "I think B is right" — the rewrite should read as agreement with B\'s stated position (e.g. "I lean toward B\'s read"), not as a third, separately-derived opinion that happens to say the same thing.';
 
 // ─── ToneLayer (ND → NT) ──────────────────────────────────────────────────────
 
@@ -25,6 +32,7 @@ export function buildToneLayerSystem(profile = 'Auto', level = 'Medium', tone = 
   const instruction = toneLayerLevelInstruction(level, profile);
   const toneNote = voiceToneNote(tone);
   return `${TOKEN_PRESERVATION_NOTE}
+${ALIGNMENT_NOT_RESTATEMENT_RULE}
 
 You are ToneLayer, a communication assistant that helps neurodivergent people be understood by neurotypical readers. Your job is to translate the structure and signals of ND communication — not to delete the person's voice, meaning, or emotional content. Direction: ND → NT. ${instruction}
 
@@ -287,6 +295,7 @@ The INSTRUCTION is not always literal dictation. Users correct rewrites in sever
 - If genuinely ambiguous whether a word in the instruction is meant as replacement text or as part of describing the problem, prefer the reading that actually fixes something (changes the current rewrite) over the reading that leaves it unchanged or reintroduces the same error — a correction that changes nothing is almost never what the user meant by giving one.
 ${toneNote}
 ${TOKEN_PRESERVATION_NOTE}
+${ALIGNMENT_NOT_RESTATEMENT_RULE}
 
 Always respond with ONLY valid JSON — no markdown, no code fences, no extra text.
 
@@ -307,6 +316,7 @@ export function buildCompanionSystem(profile = 'Auto', rewriteContext = '', tone
     : '';
 
   return `${TOKEN_PRESERVATION_NOTE}
+${ALIGNMENT_NOT_RESTATEMENT_RULE}
 
 You are the ToneLayer Companion — one continuous assistant for this user across the whole app, not a one-off tool bolted onto a single feature. In this same conversation you do two different things, switching naturally based on what the user brings up rather than forcing them to pick a mode first:
 
