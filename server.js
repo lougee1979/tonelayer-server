@@ -17,14 +17,18 @@ app.use(express.json({ limit: '10mb' }));
 // not the live server state. GET /transparency/canary.json, /transparency/release-hashes.json
 app.use('/transparency', express.static(path.join(process.cwd(), 'transparency')));
 
-const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
-const APP_TOKEN      = process.env.APP_TOKEN;
-const ADMIN_TOKEN    = process.env.ADMIN_TOKEN;
-const PORT           = process.env.PORT || 3000;
+const CLAUDE_API_KEY   = process.env.CLAUDE_API_KEY;
+const APP_TOKEN        = process.env.APP_TOKEN;
+const ADMIN_TOKEN      = process.env.ADMIN_TOKEN;
+const HUME_API_KEY     = process.env.HUME_API_KEY;
+const HUME_SECRET_KEY  = process.env.HUME_SECRET_KEY;
+const HUME_CONFIG_ID   = process.env.HUME_CONFIG_ID || 'b65c1f98-4dc7-404f-a6de-30ca963ced1d';
+const PORT             = process.env.PORT || 3000;
 
 if (!CLAUDE_API_KEY) { console.error('CLAUDE_API_KEY not set'); process.exit(1); }
 if (!APP_TOKEN)      { console.error('APP_TOKEN not set');      process.exit(1); }
 if (!ADMIN_TOKEN)    { console.warn('ADMIN_TOKEN not set — /analytics/summary will be unavailable'); }
+if (!HUME_API_KEY || !HUME_SECRET_KEY) { console.warn('HUME_API_KEY/HUME_SECRET_KEY not set — /hume/session will be unavailable'); }
 
 // ─── Auth middleware ──────────────────────────────────────────────────────────
 
@@ -236,6 +240,46 @@ app.post('/narc', auth, async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('[/narc]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Hume EVI voice session — brokers a short-lived Hume access token for
+// clients that can't safely hold the Hume API key/secret themselves (the
+// browser extension). Mirrors the OAuth2 client-credentials exchange the
+// iOS app does directly against Hume with its own bundled key
+// (HumeEVIClient.fetchAccessToken) — same flow, just server-side here so
+// the extension only ever needs the ToneLayer app token, never a Hume
+// secret of its own.
+app.post('/hume/session', auth, async (req, res) => {
+  if (!HUME_API_KEY || !HUME_SECRET_KEY) {
+    return res.status(500).json({ error: 'Hume voice is not configured on this server' });
+  }
+  try {
+    const credentials = Buffer.from(`${HUME_API_KEY}:${HUME_SECRET_KEY}`).toString('base64');
+    const tokenResp = await fetch('https://api.hume.ai/oauth2-cc/token', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${credentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: 'grant_type=client_credentials'
+    });
+    if (!tokenResp.ok) {
+      const errText = await tokenResp.text();
+      console.error('[/hume/session] token fetch failed', tokenResp.status, errText);
+      return res.status(502).json({ error: 'Could not authenticate with Hume' });
+    }
+    const tokenJson = await tokenResp.json();
+    if (!tokenJson.access_token) {
+      return res.status(502).json({ error: 'No access token returned by Hume' });
+    }
+    res.json({
+      access_token: tokenJson.access_token,
+      config_id: HUME_CONFIG_ID
+    });
+  } catch (err) {
+    console.error('[/hume/session]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -625,5 +669,5 @@ const privacyPolicyHTML = `<!DOCTYPE html>
 
 app.listen(PORT, () => {
   console.log(`✅  ToneLayer API running on port ${PORT}`);
-  console.log(`    Endpoints: GET /health  POST /rewrite  POST /refine  POST /companion  POST /narc  POST /decode  POST /analytics  GET /analytics/summary  POST /waitlist  GET /waitlist  GET /privacy  GET /terms`);
+  console.log(`    Endpoints: GET /health  POST /rewrite  POST /refine  POST /companion  POST /narc  POST /decode  POST /hume/session  POST /analytics  GET /analytics/summary  POST /waitlist  GET /waitlist  GET /privacy  GET /terms`);
 });
