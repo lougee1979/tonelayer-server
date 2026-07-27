@@ -12,6 +12,11 @@ import { buildToneLayerSystem, buildClaritySystem, buildNarcSystem, buildDecodeS
 const app  = express();
 app.use(express.json({ limit: '10mb' }));
 
+// Public transparency log (build-hash log + warrant canary). Served from
+// committed, version-controlled files — the git history is the audit trail,
+// not the live server state. GET /transparency/canary.json, /transparency/release-hashes.json
+app.use('/transparency', express.static(path.join(process.cwd(), 'transparency')));
+
 const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
 const APP_TOKEN      = process.env.APP_TOKEN;
 const ADMIN_TOKEN    = process.env.ADMIN_TOKEN;
@@ -94,7 +99,7 @@ app.get('/privacy', (_, res) => {
 app.get('/terms', (_, res) => {
   res.json({
     title: 'ToneLayer & ToneLayer Clarity Beta Testing Agreement',
-    lastUpdated: 'June 2026',
+    lastUpdated: 'July 2026',
     sections: [
       {
         number: 1,
@@ -119,7 +124,7 @@ app.get('/terms', (_, res) => {
       {
         number: 5,
         heading: 'DATA PROCESSING',
-        body: 'Text submitted to this API is sent to Anthropic for AI processing. Text is not permanently stored on this server. Do not submit sensitive personal information such as passwords, financial data, or private medical details.'
+        body: 'Before text ever leaves your device, the app automatically strips names, phone numbers, addresses, dates, bank account numbers, crypto wallet addresses/private keys/seed phrases, API keys, and any business or trade-secret terms you’ve added yourself — replacing each with a placeholder. Only the placeholder-substituted text is sent to this server, which forwards it to Anthropic for AI processing; the real values are restored on your device once a response returns and are never transmitted or stored. Text is not permanently stored on this server. This redaction is automatic and does not require any action on your part, but it is not a guarantee against every possible leak — stay careful with what you share and who you share it with.'
       },
       {
         number: 6,
@@ -490,7 +495,7 @@ const privacyPolicyHTML = `<!DOCTYPE html>
 <body>
   <div class="wrap">
     <h1>ToneLayer Privacy Policy</h1>
-    <div class="updated">Last updated: June 2026</div>
+    <div class="updated">Last updated: July 2026</div>
     <div class="card">
       <p>
         This policy covers <strong>ToneLayer</strong> and <strong>ToneLayer Clarity</strong>
@@ -501,17 +506,38 @@ const privacyPolicyHTML = `<!DOCTYPE html>
 
       <h2>1. Text You Submit for Rewriting or Decoding</h2>
       <p>
-        When you use a rewrite, decode, or screening feature, the text you enter is sent over
-        an encrypted (HTTPS) connection to the ToneLayer server, which forwards it to
-        Anthropic's Claude API to generate a response. The result is sent back to your device.
+        Before any text leaves your device, the app automatically detects and replaces
+        personally identifying and financially sensitive details with placeholder tokens:
+        names, phone numbers, addresses, dates, bank account numbers, crypto wallet
+        addresses, crypto private keys, seed phrases, and API keys/tokens. Only the
+        placeholder-substituted text is sent, over an encrypted (HTTPS) connection, to the
+        ToneLayer server, which forwards it to Anthropic's Claude API to generate a response.
+        Once a response returns, the real values are swapped back in <strong>on your device</strong> —
+        the original values are never transmitted or stored anywhere.
       </p>
       <ul>
-        <li>Your text is <strong>not stored permanently</strong> on the ToneLayer server.</li>
-        <li>Please do not enter passwords, financial information, or sensitive medical or
-          legal details into the apps or keyboards.</li>
+        <li>Your text is <strong>not stored permanently</strong> on the ToneLayer server, and what
+          the server and Anthropic ever see is the redacted version, not your original text.</li>
+        <li>For the categories above that carry the highest risk if leaked (bank accounts,
+          crypto keys/addresses, seed phrases, API keys), the app tells you when something
+          was caught and redacted.</li>
+        <li>This protection is automatic and on by default — you don't need to do anything to
+          enable it — but it is not a guarantee against every possible leak. Stay careful with
+          what you share and who you share it with.</li>
       </ul>
 
-      <h2>2. Voice &amp; Microphone (TonalInsight&trade; feature)</h2>
+      <h2>2. Business &amp; Trade-Secret Terms You Add Yourself</h2>
+      <p>
+        Client names, project codenames, and other business-confidential terms aren't
+        detectable the way a phone number or address is — there's no pattern to recognize,
+        only whatever you tell the app to always protect. You can add your own list of these
+        terms (in the app, or at first launch), and anything on that list is redacted from
+        every message the same way as the categories in Section 1, before it ever leaves your
+        device. This list is stored only on your device (and synced to your keyboard extension
+        via your device's local app-group storage) — it is never sent to our servers.
+      </p>
+
+      <h2>3. Voice &amp; Microphone (TonalInsight&trade; feature)</h2>
       <p>
         The optional TonalInsight&trade; feature uses your device's microphone to analyze the tone of
         your voice. When active, audio is streamed directly to Hume AI's Empathic Voice
@@ -523,7 +549,7 @@ const privacyPolicyHTML = `<!DOCTYPE html>
         <li>TonalInsight&trade; is entirely optional and only runs while you are actively using it.</li>
       </ul>
 
-      <h2>3. Information Stored on Your Device</h2>
+      <h2>4. Information Stored on Your Device</h2>
       <p>
         The apps and their keyboard extensions share a small amount of data on your device
         (an "App Group" container) so the keyboard can remember things like whether you've
@@ -532,14 +558,14 @@ const privacyPolicyHTML = `<!DOCTYPE html>
         our servers.
       </p>
 
-      <h2>4. No Accounts, No Ads, No Tracking</h2>
+      <h2>5. No Accounts, No Ads, No Tracking</h2>
       <p>
         The apps do not require you to create an account or sign in. We do not use
         third-party advertising or analytics SDKs, and we do not sell or share your
         information with advertisers or data brokers.
       </p>
 
-      <h2>5. Optional Anonymous Usage Analytics</h2>
+      <h2>6. Optional Anonymous Usage Analytics</h2>
       <p>
         Settings includes a separate, off-by-default toggle called "Share anonymous
         usage data." If you turn this on, the app sends anonymous counts — such as
@@ -556,25 +582,35 @@ const privacyPolicyHTML = `<!DOCTYPE html>
           Personalization &amp; Outcomes setting described above.</li>
       </ul>
 
-      <h2>6. Data Security</h2>
+      <h2>7. Data Security &amp; Transparency</h2>
       <p>
         All communication with the ToneLayer server is encrypted in transit (HTTPS), and
         access to the API requires an authorization token bundled with the apps.
       </p>
+      <p>
+        We also publish a public build-hash log and a warrant canary at
+        <a href="/transparency/canary.json">/transparency/canary.json</a> and
+        <a href="/transparency/release-hashes.json">/transparency/release-hashes.json</a>.
+        These are updated on a regular schedule and committed to public version-control
+        history, so that if we were ever compelled to distribute a secretly modified build,
+        or legally barred from disclosing that a request for data occurred, the resulting
+        silence or gap would itself be independently observable rather than resting on trust
+        alone.
+      </p>
 
-      <h2>7. Children's Privacy</h2>
+      <h2>8. Children's Privacy</h2>
       <p>
         The apps are not directed to children under 13, and we do not knowingly collect
         information from children under 13.
       </p>
 
-      <h2>8. Changes to This Policy</h2>
+      <h2>9. Changes to This Policy</h2>
       <p>
         We may update this policy from time to time. Material changes will be reflected by
         updating the "Last updated" date above.
       </p>
 
-      <h2>9. Contact</h2>
+      <h2>10. Contact</h2>
       <p>
         Questions about this policy can be sent through the feedback option in the app or to
         the support email listed on the App Store listing.
