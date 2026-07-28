@@ -50,7 +50,8 @@ function adminAuth(req, res, next) {
 
 // ─── Analytics storage (anonymized usage events, JSON file on disk) ──────────
 
-const ANALYTICS_FILE = path.join(process.cwd(), 'analytics_events.json');
+const DATA_DIR = process.env.DATA_DIR || process.cwd();
+const ANALYTICS_FILE = path.join(DATA_DIR, 'analytics_events.json');
 const MAX_ANALYTICS_EVENTS = 50000;
 
 function loadAnalyticsEvents() {
@@ -72,7 +73,7 @@ function appendAnalyticsEvent(ev) {
 
 // ─── Waitlist storage (public landing-page signups, JSON file on disk) ───────
 
-const WAITLIST_FILE = path.join(process.cwd(), 'waitlist.json');
+const WAITLIST_FILE = path.join(DATA_DIR, 'waitlist.json');
 
 function loadWaitlist() {
   try {
