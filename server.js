@@ -7,7 +7,9 @@ import 'dotenv/config';
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
-import { buildToneLayerSystem, buildClaritySystem, buildNarcSystem, buildDecodeSystem, buildRefineSystem, buildCompanionSystem } from './prompts.js';
+import OpenAI from 'openai';
+import { WebSocketServer, WebSocket as WSClient } from 'ws';
+import { buildToneLayerSystem, buildClaritySystem, buildNarcSystem, buildDecodeSystem, buildRefineSystem, buildCompanionSystem, buildRelationshipAnalysisSystem } from './prompts.js';
 
 const app  = express();
 app.use(express.json({ limit: '10mb' }));
@@ -22,13 +24,20 @@ const APP_TOKEN        = process.env.APP_TOKEN;
 const ADMIN_TOKEN      = process.env.ADMIN_TOKEN;
 const HUME_API_KEY     = process.env.HUME_API_KEY;
 const HUME_SECRET_KEY  = process.env.HUME_SECRET_KEY;
+// This specific EVI config is tuned with longer pauses before EVI assumes
+// the user is done talking, and a higher bar before EVI yields to an
+// interruption — so it doesn't cut the user off mid-thought.
 const HUME_CONFIG_ID   = process.env.HUME_CONFIG_ID || 'b65c1f98-4dc7-404f-a6de-30ca963ced1d';
+const OPENAI_API_KEY   = process.env.OPENAI_API_KEY;
 const PORT             = process.env.PORT || 3000;
 
 if (!CLAUDE_API_KEY) { console.error('CLAUDE_API_KEY not set'); process.exit(1); }
 if (!APP_TOKEN)      { console.error('APP_TOKEN not set');      process.exit(1); }
 if (!ADMIN_TOKEN)    { console.warn('ADMIN_TOKEN not set — /analytics/summary will be unavailable'); }
 if (!HUME_API_KEY || !HUME_SECRET_KEY) { console.warn('HUME_API_KEY/HUME_SECRET_KEY not set — /hume/session will be unavailable'); }
+if (!OPENAI_API_KEY) { console.warn('OPENAI_API_KEY not set — /relationship-analysis will be unavailable'); }
+
+const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
 
 // ─── Auth middleware ──────────────────────────────────────────────────────────
 
@@ -245,45 +254,29 @@ app.post('/narc', auth, async (req, res) => {
   }
 });
 
-// Hume EVI voice session — brokers a short-lived Hume access token for
-// clients that can't safely hold the Hume API key/secret themselves (the
-// browser extension). Mirrors the OAuth2 client-credentials exchange the
-// iOS app does directly against Hume with its own bundled key
-// (HumeEVIClient.fetchAccessToken) — same flow, just server-side here so
-// the extension only ever needs the ToneLayer app token, never a Hume
-// secret of its own.
-app.post('/hume/session', auth, async (req, res) => {
-  if (!HUME_API_KEY || !HUME_SECRET_KEY) {
-    return res.status(500).json({ error: 'Hume voice is not configured on this server' });
+// Fetches a short-lived Hume access token via the same OAuth2
+// client-credentials exchange the old /hume/session REST endpoint used to
+// do directly for clients — now used only internally by the relay below,
+// so no Hume credential (not even a short-lived token) ever reaches a
+// device at all.
+async function fetchHumeAccessToken() {
+  const credentials = Buffer.from(`${HUME_API_KEY}:${HUME_SECRET_KEY}`).toString('base64');
+  const tokenResp = await fetch('https://api.hume.ai/oauth2-cc/token', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${credentials}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: 'grant_type=client_credentials'
+  });
+  if (!tokenResp.ok) {
+    const errText = await tokenResp.text();
+    throw new Error(`Hume token fetch failed (${tokenResp.status}): ${errText}`);
   }
-  try {
-    const credentials = Buffer.from(`${HUME_API_KEY}:${HUME_SECRET_KEY}`).toString('base64');
-    const tokenResp = await fetch('https://api.hume.ai/oauth2-cc/token', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${credentials}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: 'grant_type=client_credentials'
-    });
-    if (!tokenResp.ok) {
-      const errText = await tokenResp.text();
-      console.error('[/hume/session] token fetch failed', tokenResp.status, errText);
-      return res.status(502).json({ error: 'Could not authenticate with Hume' });
-    }
-    const tokenJson = await tokenResp.json();
-    if (!tokenJson.access_token) {
-      return res.status(502).json({ error: 'No access token returned by Hume' });
-    }
-    res.json({
-      access_token: tokenJson.access_token,
-      config_id: HUME_CONFIG_ID
-    });
-  } catch (err) {
-    console.error('[/hume/session]', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+  const tokenJson = await tokenResp.json();
+  if (!tokenJson.access_token) throw new Error('No access token returned by Hume');
+  return tokenJson.access_token;
+}
 
 // ─── Claude API call ─────────────────────────────────────────────────────────
 
@@ -345,6 +338,30 @@ async function callClaudeConversation(system, messages, maxTokens = 2048) {
   return data.content[0].text;
 }
 
+// OpenAI call for cross-conversation relationship analysis — deliberately a
+// separate provider from callClaude/callClaudeConversation above, per
+// project decision (see project memory: user specifically wants this
+// feature on OpenAI, not Claude). Conversations are expected to already be
+// PII-redacted client-side before they ever reach this server, same as
+// every other AI-calling route here.
+async function callOpenAI(system, conversations) {
+  if (!openai) throw new Error('OpenAI is not configured on this server');
+
+  const transcript = conversations
+    .map(c => `--- Conversation on ${c.date} ---\n${c.transcript}`)
+    .join('\n\n');
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: `${transcript}\n\nReply with ONLY valid JSON.` }
+    ]
+  });
+
+  return parseJSON(completion.choices[0].message.content);
+}
+
 function parseJSON(raw) {
   let s = raw.trim();
   if (s.startsWith('```')) {
@@ -373,6 +390,33 @@ app.post('/decode', auth, async (req, res) => {
     });
   } catch (err) {
     console.error('[/decode]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Cross-conversation relationship analysis (OpenAI, not Claude — see the
+// callOpenAI comment above). Expects several already-redacted conversations
+// between the same two people, each with a date, so patterns can be
+// analyzed across time rather than within a single message or thread.
+app.post('/relationship-analysis', auth, async (req, res) => {
+  const { conversations } = req.body;
+  if (!Array.isArray(conversations) || conversations.length === 0) {
+    return res.status(400).json({ error: 'conversations (non-empty array) is required' });
+  }
+  if (conversations.some(c => !c?.date || !c?.transcript?.trim())) {
+    return res.status(400).json({ error: 'each conversation needs a date and a non-empty transcript' });
+  }
+  try {
+    const raw = await callOpenAI(buildRelationshipAnalysisSystem(), conversations);
+    res.json({
+      summary:         raw.summary ?? '',
+      patterns:        raw.patterns ?? [],
+      notable_shifts:  raw.notable_shifts ?? [],
+      confidence:      raw.confidence ?? 'low',
+      caveats:         raw.caveats ?? '',
+    });
+  } catch (err) {
+    console.error('[/relationship-analysis]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -666,9 +710,95 @@ const privacyPolicyHTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
+// ─── Hume voice relay (WebSocket) ──────────────────────────────────────────
+// Devices never talk to Hume directly at all — they connect here, and this
+// relays to Hume's real WebSocket behind the scenes, so no Hume credential
+// (not even a short-lived token) ever reaches a device. Auth happens via the
+// connection's *first message*, not a URL param (so a token never lands in
+// access/proxy logs) — this also works uniformly for iOS
+// (URLSessionWebSocketTask, which can set headers on connect) and the
+// Chrome extension (plain WebSocket, which can't set custom headers at
+// all). Past that first message, this is a dumb bidirectional byte relay —
+// it doesn't parse or understand Hume's protocol, just forwards frames
+// (preserving binary vs. text) in both directions.
+const humeRelayWSS = new WebSocketServer({ noServer: true });
+
+humeRelayWSS.on('connection', (clientWS) => {
+  let humeWS = null;
+  let authed = false;
+  const pending = []; // [data, isBinary] pairs queued until Hume's socket opens
+
+  const closeBoth = (code, reason) => {
+    if (clientWS.readyState === WSClient.OPEN) clientWS.close(code, reason);
+    if (humeWS && humeWS.readyState === WSClient.OPEN) humeWS.close(code, reason);
+  };
+
+  clientWS.on('message', async (data, isBinary) => {
+    if (!authed) {
+      if (isBinary) return closeBoth(1008, 'First message must be auth');
+      let msg;
+      try { msg = JSON.parse(data.toString()); } catch { return closeBoth(1008, 'Invalid auth message'); }
+      if (msg.type !== 'auth' || msg.token !== APP_TOKEN) return closeBoth(1008, 'Unauthorized');
+      authed = true;
+
+      if (!HUME_API_KEY || !HUME_SECRET_KEY) {
+        return closeBoth(1011, 'Hume voice is not configured on this server');
+      }
+      try {
+        const accessToken = await fetchHumeAccessToken();
+        const params = new URLSearchParams({ access_token: accessToken, config_id: HUME_CONFIG_ID });
+        // Lets a client resume an existing Hume chat group (conversation
+        // continuity) by naming it in the auth message — same mechanism the
+        // extension previously passed straight through to Hume itself.
+        if (typeof msg.resumedChatGroupId === 'string' && msg.resumedChatGroupId) {
+          params.set('resumed_chat_group_id', msg.resumedChatGroupId);
+        }
+        humeWS = new WSClient(`wss://api.hume.ai/v0/evi/chat?${params.toString()}`);
+
+        humeWS.on('open', () => {
+          for (const [buf, bin] of pending) humeWS.send(buf, { binary: bin });
+          pending.length = 0;
+        });
+        humeWS.on('message', (humeData, humeBinary) => {
+          if (clientWS.readyState === WSClient.OPEN) clientWS.send(humeData, { binary: humeBinary });
+        });
+        humeWS.on('close', (code, reason) => closeBoth(code, reason));
+        humeWS.on('error', (err) => {
+          console.error('[hume relay] hume socket error', err.message);
+          closeBoth(1011, 'Hume connection error');
+        });
+      } catch (err) {
+        console.error('[hume relay] auth/connect failed', err.message);
+        closeBoth(1011, 'Could not connect to Hume');
+      }
+      return;
+    }
+
+    if (humeWS && humeWS.readyState === WSClient.OPEN) {
+      humeWS.send(data, { binary: isBinary });
+    } else {
+      pending.push([data, isBinary]);
+    }
+  });
+
+  clientWS.on('close', () => { if (humeWS) humeWS.close(); });
+  clientWS.on('error', () => { if (humeWS) humeWS.close(); });
+});
+
 // ─── Start ────────────────────────────────────────────────────────────────────
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`✅  ToneLayer API running on port ${PORT}`);
-  console.log(`    Endpoints: GET /health  POST /rewrite  POST /refine  POST /companion  POST /narc  POST /decode  POST /hume/session  POST /analytics  GET /analytics/summary  POST /waitlist  GET /waitlist  GET /privacy  GET /terms`);
+  console.log(`    Endpoints: GET /health  POST /rewrite  POST /refine  POST /companion  POST /narc  POST /decode  WS /hume/relay  POST /relationship-analysis  POST /analytics  GET /analytics/summary  POST /waitlist  GET /waitlist  GET /privacy  GET /terms`);
+});
+
+server.on('upgrade', (req, socket, head) => {
+  const { pathname } = new URL(req.url, `http://${req.headers.host}`);
+  if (pathname === '/hume/relay') {
+    humeRelayWSS.handleUpgrade(req, socket, head, (ws) => {
+      humeRelayWSS.emit('connection', ws, req);
+    });
+  } else {
+    socket.destroy();
+  }
 });
