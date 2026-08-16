@@ -1,0 +1,19 @@
+{
+  "name": "pedicab-rideshare",
+  "version": "1.0.0",
+  "description": "Pedicab rideshare platform — an Uber-style app built specifically for pedicabs. Works in any city (OpenStreetMap, no map API key).",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "seed": "node scripts/seed-demo.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.21.1"
+  }
+}

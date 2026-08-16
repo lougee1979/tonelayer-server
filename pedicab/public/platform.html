@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PediGo — Platform Economics</title>
+  <meta name="theme-color" content="#0f1216" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <span class="logo">📊</span>
+      <div><h1>Platform Economics</h1><div class="sub">Live totals</div></div>
+      <span class="spacer"></span>
+      <a href="/" class="badge">home</a>
+    </div>
+
+    <div class="sheet" style="border-radius:0;flex:1">
+      <div class="card">
+        <div class="kv"><span class="k">Registered drivers</span><span class="v" id="drivers">—</span></div>
+        <div class="kv"><span class="k">Active members</span><span class="v" id="members">—</span></div>
+        <div class="kv"><span class="k">Rides (total / completed)</span><span class="v" id="rides">—</span></div>
+      </div>
+      <div class="card">
+        <div class="kv"><span class="k">Gross fares</span><span class="v" id="gross">—</span></div>
+        <div class="kv"><span class="k">Commission revenue</span><span class="v" id="comm">—</span></div>
+        <div class="kv"><span class="k">Membership revenue</span><span class="v" id="memrev">—</span></div>
+        <div class="kv total"><span class="k">Total platform revenue</span><span class="v" id="total">—</span></div>
+      </div>
+      <p class="small muted">The platform earns two ways: a recurring monthly membership from each driver, plus a percentage commission on every completed fare. Both are configurable in <code>lib/config.js</code>.</p>
+      <button class="ghost" id="refresh">Refresh</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { api, getConfig, money } from '/js/shared.js';
+    const cfg = await getConfig();
+    async function load() {
+      const s = await api.get('/api/platform/summary');
+      document.getElementById('drivers').textContent = s.drivers;
+      document.getElementById('members').textContent = s.activeMembers;
+      document.getElementById('rides').textContent = `${s.rides} / ${s.completedRides}`;
+      document.getElementById('gross').textContent = money(s.grossFares, cfg);
+      document.getElementById('comm').textContent = money(s.platformCommission, cfg);
+      document.getElementById('memrev').textContent = money(s.membershipRevenue, cfg);
+      document.getElementById('total').textContent = money(s.platformRevenue, cfg);
+    }
+    document.getElementById('refresh').onclick = load;
+    load();
+  </script>
+</body>
+</html>

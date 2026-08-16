@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>PediGo — Pedicab Rideshare</title>
+  <meta name="theme-color" content="#0f1216" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <div class="app">
+    <div class="landing">
+      <div class="hero">🚲</div>
+      <h1>PediGo</h1>
+      <p>The rideshare app built for pedicabs. Hail a nearby pedicab in any city — or drive one and earn.</p>
+
+      <div class="choice">
+        <a href="/rider.html">
+          <span class="big">🧍</span>
+          <strong>I need a ride</strong>
+          <span>Find a pedicab near you, see the fare up front, and track it in real time.</span>
+        </a>
+        <a href="/driver.html">
+          <span class="big">🚲</span>
+          <strong>I drive a pedicab</strong>
+          <span>Register, go online, and get ride requests nearby. Keep most of every fare.</span>
+        </a>
+      </div>
+
+      <div class="feegrid" id="feegrid">
+        <div class="card"><div class="n" id="fee">—</div><div class="l">/ month membership</div></div>
+        <div class="card"><div class="n" id="comm">—</div><div class="l">platform fee per ride</div></div>
+      </div>
+
+      <p class="small muted" style="margin-top:22px">
+        Maps by OpenStreetMap — works in any city, no map key required.
+        <br /><a href="/platform.html">Platform economics →</a>
+      </p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { getConfig, money } from '/js/shared.js';
+    const cfg = await getConfig();
+    document.getElementById('fee').textContent = money(cfg.billing.monthlyFee, cfg);
+    document.getElementById('comm').textContent = Math.round(cfg.billing.commissionRate * 100) + '%';
+  </script>
+</body>
+</html>
