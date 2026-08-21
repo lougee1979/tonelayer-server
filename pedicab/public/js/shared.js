@@ -108,11 +108,13 @@ const emojiIcon = (emoji) => L.divIcon({
   html: `<div style="font-size:28px;line-height:28px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))">${emoji}</div>`,
   className: 'emoji-marker', iconSize: [28, 28], iconAnchor: [14, 14],
 });
+// Lazy getters: the icons touch Leaflet's `L` only when read (on a map page),
+// so pages without a map (landing, platform dashboard) can still import this.
 export const ICON = {
-  pickup: emojiIcon('🟢'),
-  dropoff: emojiIcon('🏁'),
-  pedicab: emojiIcon('🚲'),
-  rider: emojiIcon('🧍'),
+  get pickup()  { return emojiIcon('🟢'); },
+  get dropoff() { return emojiIcon('🏁'); },
+  get pedicab() { return emojiIcon('🚲'); },
+  get rider()   { return emojiIcon('🧍'); },
 };
 
 export function setMarker(map, existing, coord, icon, opts = {}) {

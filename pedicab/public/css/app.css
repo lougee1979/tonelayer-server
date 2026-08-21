@@ -130,7 +130,7 @@ button.ghost { background: transparent; border: 1px solid var(--line); color: va
   position: fixed; left: 50%; transform: translateX(-50%); bottom: 22px;
   background: #000; color: #fff; padding: 11px 16px; border-radius: 10px;
   font-size: 14px; z-index: 2000; box-shadow: var(--shadow); opacity: 0; transition: opacity .2s;
-  max-width: 90%; text-align: center;
+  max-width: 90%; text-align: center; pointer-events: none;
 }
 .toast.show { opacity: .95; }
 
