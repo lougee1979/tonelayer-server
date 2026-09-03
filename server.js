@@ -9,7 +9,8 @@ import fs from 'fs';
 import path from 'path';
 import OpenAI from 'openai';
 import { WebSocketServer, WebSocket as WSClient } from 'ws';
-import { buildToneLayerSystem, buildClaritySystem, buildNarcSystem, buildDecodeSystem, buildRefineSystem, buildCompanionSystem, buildRelationshipAnalysisSystem } from './prompts.js';
+import { buildToneLayerSystem, buildClaritySystem, buildNarcSystem, buildDecodeSystem, buildRefineSystem, buildCoachSystem, buildRelationshipAnalysisSystem } from './prompts.js';
+import * as toolRegistry from './toolRegistry.js';
 
 const app  = express();
 app.use(express.json({ limit: '10mb' }));
@@ -204,18 +205,33 @@ app.post('/refine', auth, async (req, res) => {
   }
 });
 
-// Companion — a single continuous conversational entity that both refines
-// rewrites and coaches on prioritization/decisions in the same thread,
-// instead of the isolated one-shot request/response every other route
-// here uses. Unlike /refine, the client sends the *whole* conversation so
-// far (not just one instruction), and the reply is plain conversational
-// text, not structured JSON — this is a chat, not a rewrite tool.
-app.post('/companion', auth, async (req, res) => {
+// Coach (formerly "Companion") — a single continuous conversational entity
+// that both refines rewrites and coaches on prioritization/decisions in the
+// same thread, instead of the isolated one-shot request/response every
+// other route here uses. Unlike /refine, the client sends the *whole*
+// conversation so far (not just one instruction), and the reply is plain
+// conversational text, not structured JSON — this is a chat, not a rewrite
+// tool. Registered under both /coach (current) and /companion (kept as an
+// alias so app installs still on the old client build don't 404 mid-rollout
+// — safe to drop once the client's AppConfig.companionURL is fully retired).
+app.post(['/coach', '/companion'], auth, async (req, res) => {
   const {
     messages = [],
     rewriteContext = '',
     profile = 'Auto',
-    tone = ''
+    tone = '',
+    // Which abilities the client has turned on (Settings' coachCanRewrite/
+    // coachCanDecode/coachCanScreenManipulation) — omitted or absent means
+    // all on, so older clients that don't send this yet keep working.
+    enabledTools = null,
+    // Aggregate pattern summary built client-side from LogStore — counts
+    // and named patterns only, never raw message text (see CoachView's
+    // buildMemoryContext). Optional so older clients keep working.
+    memoryContext = '',
+    // Already-known name, if the client has one saved from a prior
+    // save_user_info call — lets Coach skip re-asking and address the user
+    // directly instead of starting the onboarding question every session.
+    userName = ''
   } = req.body;
 
   if (!Array.isArray(messages) || messages.length === 0) {
@@ -228,11 +244,18 @@ app.post('/companion', auth, async (req, res) => {
   }
 
   try {
-    const system = buildCompanionSystem(profile, rewriteContext, tone);
-    const reply = await callClaudeConversation(system, messages, 2048);
-    res.json({ reply });
+    const system = buildCoachSystem(profile, rewriteContext, tone, memoryContext, userName);
+    const filtered = Array.isArray(enabledTools)
+      ? COACH_TOOLS.filter(t => enabledTools.includes(t.name))
+      : COACH_TOOLS;
+    // save_user_info is always available, independent of the toggleable
+    // abilities — it's onboarding/identity, not a feature the user turns off.
+    const tools = [...filtered, SAVE_USER_INFO_TOOL];
+    const { text, toolCalls } = await callClaudeConversation(system, messages, 2048, tools, executeCoachTool, 'claude-sonnet-5');
+    const savedInfo = toolCalls.find(c => c.name === 'save_user_info')?.input ?? null;
+    res.json({ reply: text, userInfo: savedInfo });
   } catch (err) {
-    console.error('[/companion]', err.message);
+    console.error('[/coach]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -246,7 +269,7 @@ app.post('/narc', auth, async (req, res) => {
   }
 
   try {
-    const result = await callClaude(buildNarcSystem(), text, 4096);
+    const result = await callClaude(buildNarcSystem(), text, 4096, 'claude-sonnet-5');
     res.json(result);
   } catch (err) {
     console.error('[/narc]', err.message);
@@ -280,7 +303,7 @@ async function fetchHumeAccessToken() {
 
 // ─── Claude API call ─────────────────────────────────────────────────────────
 
-async function callClaude(system, text, maxTokens = 8192) {
+async function callClaude(system, text, maxTokens = 8192, model = 'claude-haiku-4-5-20251001') {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method:  'POST',
     headers: {
@@ -289,7 +312,7 @@ async function callClaude(system, text, maxTokens = 8192) {
       'content-type':      'application/json'
     },
     body: JSON.stringify({
-      model:      'claude-haiku-4-5-20251001',
+      model,
       max_tokens: maxTokens,
       system,
       messages: [{
@@ -312,30 +335,183 @@ async function callClaude(system, text, maxTokens = 8192) {
 // Same Claude call, but for a real multi-turn conversation: takes the full
 // message history and returns plain conversational text instead of forcing
 // every reply into the fixed JSON shape the rewrite/refine/narc/decode
-// routes need.
-async function callClaudeConversation(system, messages, maxTokens = 2048) {
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method:  'POST',
-    headers: {
-      'x-api-key':         CLAUDE_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'content-type':      'application/json'
-    },
-    body: JSON.stringify({
-      model:      'claude-haiku-4-5-20251001',
-      max_tokens: maxTokens,
-      system,
-      messages
-    })
-  });
+// routes need. Optional `tools`/`executeTool` let the caller (Coach) reach
+// into the app's other features as tool calls instead of the user having
+// to navigate to a separate tab — see COACH_TOOLS below.
+// Returns { text, toolCalls } rather than a bare string — toolCalls records
+// every tool invoked during the loop (name + input) so the caller can react
+// to ones that carry client-relevant data (e.g. save_user_info) instead of
+// only ever seeing Coach's synthesized final reply.
+async function callClaudeConversation(system, messages, maxTokens = 2048, tools = null, executeTool = null, model = 'claude-haiku-4-5-20251001') {
+  let convo = messages;
+  const toolCalls = [];
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Claude API error ${response.status}`);
+  for (let iteration = 0; iteration < 5; iteration++) {
+    const body = { model, max_tokens: maxTokens, system, messages: convo };
+    if (tools) body.tools = tools;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method:  'POST',
+      headers: {
+        'x-api-key':         CLAUDE_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type':      'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error?.message || `Claude API error ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.stop_reason !== 'tool_use' || !executeTool) {
+      const text = data.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
+      return { text, toolCalls };
+    }
+
+    // Execute every tool_use block from this turn, then feed all results
+    // back in a single user message (parallel tool calls must be answered
+    // together — splitting them across messages breaks the API contract).
+    const toolUses = data.content.filter(b => b.type === 'tool_use');
+    const toolResults = [];
+    for (const call of toolUses) {
+      toolCalls.push({ name: call.name, input: call.input });
+      let output;
+      try {
+        output = await executeTool(call.name, call.input);
+      } catch (err) {
+        toolResults.push({ type: 'tool_result', tool_use_id: call.id, content: err.message, is_error: true });
+        continue;
+      }
+      toolResults.push({ type: 'tool_result', tool_use_id: call.id, content: output });
+    }
+
+    convo = [...convo, { role: 'assistant', content: data.content }, { role: 'user', content: toolResults }];
   }
 
-  const data = await response.json();
-  return data.content[0].text;
+  throw new Error('Coach tool loop did not resolve after 5 iterations');
+}
+
+// ─── Coach tools ────────────────────────────────────────────────────────────
+// Each tool wraps an existing route's own builder + callClaude — same
+// prompts, same behavior, just reachable from conversation instead of a
+// separate tab. Keep this list scoped; add a tool only once the underlying
+// feature already works standalone.
+
+const COACH_TOOLS = [
+  {
+    name: 'rewrite_message',
+    description: 'Rewrite a message so it reads clearly to its recipient. Use when the user shares something they wrote (or want to write) and asks for it to be rewritten, cleaned up, or made to land better for the person reading it.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'The exact message text to rewrite.' },
+        direction: { type: 'string', enum: ['to_nt', 'to_nd'], description: "'to_nt' (default): rewrite the user's own message for an unfamiliar/NT reader. 'to_nd': rewrite a message someone else sent the user so it lands more clearly for an ND reader." },
+        level: { type: 'string', enum: ['Light', 'Medium', 'Strong'], description: 'How much to restructure. Default Medium if the user does not say.' }
+      },
+      required: ['text']
+    }
+  },
+  {
+    name: 'decode_message',
+    description: "Decode a message the user received from someone else — what it actually means, what communication patterns are present, and how it's written. Use when the user shares a message someone sent them and wants to understand it.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'The exact message text the user received.' },
+        contact: { type: 'string', description: 'Who sent it, only if the user says.' },
+        sensitivity: { type: 'string', enum: ['Low', 'Medium', 'High'], description: 'How much to flag. Default Low if the user does not say.' }
+      },
+      required: ['text']
+    }
+  },
+  {
+    name: 'screen_for_manipulation',
+    description: 'Deep-dive analysis of a received message specifically for manipulation tactics (gaslighting, DARVO, guilt-tripping, love-bombing, etc.), with direct validation and a short boundary script. Use when the user wants a more thorough read than decode_message on a message that feels off, or explicitly asks to check for manipulation.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'The exact message text to screen.' }
+      },
+      required: ['text']
+    }
+  },
+  {
+    name: 'check_agreement',
+    description: 'Check a contract, subscription terms, checkout page, or similar agreement text for hidden fees, auto-renewal, or other mismatches between what the user expects and what it actually says. Use when the user pastes agreement/contract/subscription/terms text, or asks whether a deal or bill looks right. This calls an external tool (Agree2What) — not built into ToneLayer itself.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'The exact agreement/contract/subscription text to check.' }
+      },
+      required: ['text']
+    }
+  }
+];
+
+// Always available, independent of the toggleable abilities above — see the
+// /coach route. Calling it doesn't do anything server-side; the point is
+// getting the name/preference into the response so the client can persist
+// it (see server.js's savedInfo extraction and CoachView's handling).
+const SAVE_USER_INFO_TOOL = {
+  name: 'save_user_info',
+  description: "Call this the moment the user tells you their name, or states a preference for typing vs. speaking — even in passing, not just in direct answer to being asked. Don't wait for a dedicated onboarding moment; if they mention it, save it.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      name: { type: 'string', description: "The user's name, exactly as they gave it." },
+      prefersVoice: { type: 'boolean', description: 'True if they said they prefer speaking/voice, false if they said they prefer typing. Omit if they did not say.' }
+    },
+    required: ['name']
+  }
+};
+
+async function executeCoachTool(name, input) {
+  if (name === 'rewrite_message') {
+    const system = input.direction === 'to_nd'
+      ? buildClaritySystem('General ND', input.level || 'Medium', 'Rewrite', '')
+      : buildToneLayerSystem('Auto', input.level || 'Medium', '');
+    const result = await callClaude(system, input.text, 8192);
+    return JSON.stringify({ paragraphs: result.paragraphs, explanation: result.explanation });
+  }
+  if (name === 'decode_message') {
+    const system = buildDecodeSystem(input.contact || '', input.sensitivity || 'Low', null, '');
+    const result = await callClaude(system, input.text, 1024, 'claude-sonnet-5');
+    return JSON.stringify(result);
+  }
+  if (name === 'screen_for_manipulation') {
+    const result = await callClaude(buildNarcSystem(), input.text, 4096, 'claude-sonnet-5');
+    return JSON.stringify(result);
+  }
+  if (name === 'save_user_info') {
+    // No server-side action — the /coach route pulls this call's input
+    // straight out of toolCalls and returns it to the client to persist.
+    // This ack is just what goes back to Claude to continue the turn.
+    return JSON.stringify({ saved: true });
+  }
+  if (name === 'check_agreement') {
+    // Looked up by name against the same registry the standalone
+    // orchestrator (/tools/route, /tools/:id/invoke) uses — Coach isn't a
+    // separate integration path, it's another caller of the same external-
+    // tool system, so a tool suspended or disabled there is unavailable
+    // here too, automatically, with no separate toggle to keep in sync.
+    const tool = toolRegistry
+      .listTools({ status: 'approved' })
+      .find(t => t.enabled && t.name.toLowerCase() === 'agree2what');
+    if (!tool) {
+      return JSON.stringify({ error: 'Agreement checking is not available right now.' });
+    }
+    try {
+      const data = await invokeTool(tool, { clipboardText: input.text });
+      return JSON.stringify(data);
+    } catch (err) {
+      return JSON.stringify({ error: 'Could not check this agreement right now.' });
+    }
+  }
+  throw new Error(`Unknown tool: ${name}`);
 }
 
 // OpenAI call for cross-conversation relationship analysis — deliberately a
@@ -377,10 +553,10 @@ function parseJSON(raw) {
 
 // Decode (incoming message — translate + baseline-aware flags)
 app.post('/decode', auth, async (req, res) => {
-  const { text, contact = '', sensitivity = 'Low', baseline = null, senderProfile = '' } = req.body;
+  const { text, contact = '', sensitivity = 'Low', baseline = null, senderProfile = '', tone = '' } = req.body;
   if (!text?.trim()) return res.status(400).json({ error: 'text is required' });
   try {
-    const raw = await callClaude(buildDecodeSystem(contact, sensitivity, baseline, senderProfile), text, 1024);
+    const raw = await callClaude(buildDecodeSystem(contact, sensitivity, baseline, senderProfile, tone), text, 1024, 'claude-sonnet-5');
     res.json({
       translation:        raw.translation ?? '',
       patterns:           raw.patterns ?? raw.flags ?? [],
@@ -519,6 +695,184 @@ app.options('/waitlist', (_, res) => {
 // /analytics/summary, so the raw list (names/emails) isn't publicly readable.
 app.get('/waitlist', adminAuth, (_, res) => {
   res.json({ entries: loadWaitlist() });
+});
+
+// ─── External developer tools (registry + orchestration) ────────────────────
+//
+// Extensibility model: a third-party developer runs their own tool on their
+// own server. This server never executes third-party code — it only proxies
+// a filtered slice of context to a tool's endpoint and relays the response
+// back to the app. See toolRegistry.js for the privacy boundary this relies
+// on: a tool only ever receives the context fields it explicitly declared
+// wanting at registration, enforced here server-side, not left to policy.
+// Full contract for developers: DEVELOPER_API.md.
+
+const TOOL_CAN_HANDLE_TIMEOUT_MS = 3000;
+const TOOL_INVOKE_TIMEOUT_MS     = 15000;
+
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Self-serve registration. Public — no app token, since these are outside
+// developers, not the ToneLayer app itself. The API key is returned exactly
+// once; the developer must save it immediately, same principle as every
+// other secret in this codebase.
+app.post('/developer/tools/register', (req, res) => {
+  try {
+    const { tool, apiKey } = toolRegistry.registerTool(req.body ?? {});
+    res.status(201).json({
+      tool,
+      apiKey,
+      notice: 'Save this API key now — it will not be shown again. Your tool is pending review and will not be routed to any user until approved.',
+    });
+  } catch (err) {
+    if (err instanceof toolRegistry.ValidationError) {
+      return res.status(400).json({ error: err.message });
+    }
+    console.error('tool registration failed:', err);
+    res.status(500).json({ error: 'Registration failed.' });
+  }
+});
+
+function toolKeyAuth(req, res, next) {
+  const key = req.headers['x-tool-api-key'];
+  if (!key) return res.status(401).json({ error: 'Missing x-tool-api-key header' });
+  const tool = toolRegistry.findByApiKey(String(key));
+  if (!tool) return res.status(401).json({ error: 'Invalid API key' });
+  req.tool = tool;
+  next();
+}
+
+// A developer checking on their own tool's review status.
+app.get('/developer/tools/me', toolKeyAuth, (req, res) => {
+  res.json({ tool: toolRegistry.getTool(req.tool.id) });
+});
+
+// Self-serve pause/resume only. Changing the endpoint or requested data
+// needs re-review, so that isn't exposed here yet — register a new tool
+// for that until a proper resubmission flow exists.
+app.patch('/developer/tools/me', toolKeyAuth, (req, res) => {
+  if (typeof req.body?.enabled !== 'boolean') {
+    return res.status(400).json({
+      error: 'Only { enabled: boolean } can be changed here. To change your endpoint or requested data, register a new tool — that needs re-review either way.',
+    });
+  }
+  const tool = toolRegistry.setEnabled(req.tool.id, req.body.enabled);
+  res.json({ tool });
+});
+
+app.post('/developer/tools/me/rotate-key', toolKeyAuth, (req, res) => {
+  const { tool, apiKey } = toolRegistry.rotateApiKey(req.tool.id);
+  res.json({
+    tool,
+    apiKey,
+    notice: 'Save this new key now — the old one stopped working immediately and this one will not be shown again.',
+  });
+});
+
+// ─── Admin: tool review queue ─────────────────────────────────────────────────
+
+app.get('/admin/tools', adminAuth, (req, res) => {
+  res.json({ tools: toolRegistry.listTools({ status: req.query.status }) });
+});
+
+app.post('/admin/tools/:id/approve', adminAuth, (req, res) => {
+  const tool = toolRegistry.setStatus(req.params.id, 'approved');
+  if (!tool) return res.status(404).json({ error: 'Tool not found' });
+  res.json({ tool });
+});
+
+app.post('/admin/tools/:id/reject', adminAuth, (req, res) => {
+  const tool = toolRegistry.setStatus(req.params.id, 'rejected');
+  if (!tool) return res.status(404).json({ error: 'Tool not found' });
+  res.json({ tool });
+});
+
+app.post('/admin/tools/:id/suspend', adminAuth, (req, res) => {
+  const tool = toolRegistry.setStatus(req.params.id, 'suspended');
+  if (!tool) return res.status(404).json({ error: 'Tool not found' });
+  res.json({ tool });
+});
+
+// ─── Orchestration: called by the ToneLayer app only (app-token gated) ───────
+
+// Fans out to every approved+enabled tool's /can-handle with a short
+// timeout and only that tool's own declared slice of context. A broken or
+// slow third-party tool is dropped from the results, not surfaced as an
+// error — one bad external tool must never degrade the orchestrator for
+// every user.
+app.post('/tools/route', auth, async (req, res) => {
+  const context = req.body?.context ?? {};
+  const candidates = toolRegistry.routableTools();
+
+  const results = await Promise.all(candidates.map(async (tool) => {
+    try {
+      const filtered = toolRegistry.filterContextForTool(tool, context);
+      const response = await fetchWithTimeout(`${tool.endpointBaseURL}/can-handle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ context: filtered }),
+      }, TOOL_CAN_HANDLE_TIMEOUT_MS);
+      if (!response.ok) return null;
+      const data = await response.json();
+      if (!data?.canHandle) return null;
+      const confidence = typeof data.confidence === 'number' ? Math.max(0, Math.min(1, data.confidence)) : 0.5;
+      return {
+        toolId: tool.id,
+        name: tool.name,
+        confidence,
+        summary: typeof data.summary === 'string' ? data.summary : undefined,
+      };
+    } catch (err) {
+      console.error(`tool ${tool.id} (${tool.name}) can-handle failed:`, err.message);
+      return null;
+    }
+  }));
+
+  const ranked = results.filter(Boolean).sort((a, b) => b.confidence - a.confidence);
+  res.json({ candidates: ranked });
+});
+
+// Shared by the HTTP proxy route below and by Coach's own direct tool-call
+// path (COACH_TOOLS' check_agreement) — one place that actually calls out
+// to a third-party tool's /handle endpoint, so the context-filtering
+// privacy boundary can't be bypassed by either caller.
+async function invokeTool(tool, context) {
+  const filtered = toolRegistry.filterContextForTool(tool, context ?? {});
+  const response = await fetchWithTimeout(`${tool.endpointBaseURL}/handle`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ context: filtered }),
+  }, TOOL_INVOKE_TIMEOUT_MS);
+  if (!response.ok) {
+    throw new Error('Tool did not respond successfully.');
+  }
+  return response.json();
+}
+
+// Proxies to one specific tool's /handle endpoint. The app never talks to a
+// third-party server directly — every external-tool call goes through here
+// so it can be logged, rate-limited, and revoked in one place without an
+// app update.
+app.post('/tools/:id/invoke', auth, async (req, res) => {
+  const tool = toolRegistry.getTool(req.params.id);
+  if (!tool || tool.status !== 'approved' || !tool.enabled) {
+    return res.status(404).json({ error: 'Tool not available' });
+  }
+  try {
+    const data = await invokeTool(tool, req.body?.context ?? {});
+    res.json(data);
+  } catch (err) {
+    console.error(`tool ${tool.id} (${tool.name}) invoke failed:`, err.message);
+    res.status(502).json({ error: 'Tool did not respond in time.' });
+  }
 });
 
 // ─── Privacy policy page ──────────────────────────────────────────────────────
@@ -789,7 +1143,7 @@ humeRelayWSS.on('connection', (clientWS) => {
 
 const server = app.listen(PORT, () => {
   console.log(`✅  ToneLayer API running on port ${PORT}`);
-  console.log(`    Endpoints: GET /health  POST /rewrite  POST /refine  POST /companion  POST /narc  POST /decode  WS /hume/relay  POST /relationship-analysis  POST /analytics  GET /analytics/summary  POST /waitlist  GET /waitlist  GET /privacy  GET /terms`);
+  console.log(`    Endpoints: GET /health  POST /rewrite  POST /refine  POST /coach (alias: /companion)  POST /narc  POST /decode  WS /hume/relay  POST /relationship-analysis  POST /analytics  GET /analytics/summary  POST /waitlist  GET /waitlist  GET /privacy  GET /terms  POST /developer/tools/register  GET /developer/tools/me  PATCH /developer/tools/me  POST /developer/tools/me/rotate-key  GET /admin/tools  POST /admin/tools/:id/approve  POST /admin/tools/:id/reject  POST /admin/tools/:id/suspend  POST /tools/route  POST /tools/:id/invoke`);
 });
 
 server.on('upgrade', (req, socket, head) => {

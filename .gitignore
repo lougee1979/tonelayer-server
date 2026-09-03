@@ -1,3 +1,5 @@
 node_modules/
 .env
 analytics_events.json
+waitlist.json
+tool_registry.json
