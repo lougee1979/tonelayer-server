@@ -475,7 +475,7 @@ async function executeCoachTool(name, input) {
       ? buildClaritySystem('General ND', input.level || 'Medium', 'Rewrite', '')
       : buildToneLayerSystem('Auto', input.level || 'Medium', '');
     const result = await callClaude(system, input.text, 8192);
-    return JSON.stringify({ paragraphs: result.paragraphs, explanation: result.explanation });
+    return JSON.stringify({ paragraphs: result.paragraphs, explanation: result.explanation, how_it_lands: result.how_it_lands });
   }
   if (name === 'decode_message') {
     const system = buildDecodeSystem(input.contact || '', input.sensitivity || 'Low', null, '');
