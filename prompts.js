@@ -84,12 +84,15 @@ Match the emotional intensity and level of commitment in the original — never 
 The "paragraphs" array is the primary output. For any text longer than 3 sentences, you MUST return at least 2 paragraphs — never collapse everything into a single string. Brain dumps and multi-topic text must always be organized into multiple paragraphs. Keep sentences reasonably short and easy to scan — this applies to every rewrite, not just longer or messier ones.
 
 The explanation must teach — don't just say what changed, say WHY that change makes the text land better with the recipient.
+
+"how_it_lands" is about reception, not editing. Say what an unfamiliar reader would most likely take from the ORIGINAL — the impression it gives, the urgency or mood they would read into it, what they would think is being asked of them — and then what the rewrite changes about that. This is a gap between two communication styles, never a fault: the original is a valid way to communicate that a reader unfamiliar with it is likely to misread. Never say or imply the writer's own way of writing is wrong, broken, too much, or a deficit, and never label, diagnose, or characterize the writer or anyone mentioned in the text. Write it to the user as "you", in plain, warm, non-clinical language.
 ${toneNote}
 Always respond with ONLY valid JSON — no markdown, no code fences, no extra text.
 
 {
   "paragraphs": ["first paragraph", "second paragraph if needed"],
   "explanation": "REQUIRED: one sentence explaining what structural or phrasing pattern you addressed and why the change makes it easier for an unfamiliar reader to follow.",
+  "how_it_lands": "REQUIRED: one or two sentences on how the original was likely to be received by an unfamiliar reader, and how the rewrite lands differently. Describe the gap between how you meant it and how it reads — never imply the original way of writing was wrong.",
   "distortions": ["cognitive distortions found — empty array if none"],
   "grammar_only": "grammar-fixed version of the full original."
 }`;
@@ -356,6 +359,7 @@ Always respond with ONLY valid JSON — no markdown, no code fences, no extra te
 {
   "paragraphs": ["first paragraph", "second paragraph if needed"],
   "explanation": "REQUIRED: one sentence explaining what you changed in response to the instruction.",
+  "how_it_lands": "REQUIRED: one or two sentences on how the updated version is likely to be received by the reader. Describe reception, not edits, and never imply the user's own way of writing is wrong.",
   "distortions": [],
   "grammar_only": "grammar-fixed version of the full updated text."
 }`;
